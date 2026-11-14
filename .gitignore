@@ -1,0 +1,11 @@
+logs
+*.log
+
+notes.md
+rsp.md
+unp.py
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
