@@ -26,14 +26,14 @@ def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: Annotated[Session, Depends(get_session)],
 ):
-    user_id: int | None = getattr(service.authenticate(session, form_data.username, form_data.password), 'id')
-    if not user_id:
+    user = service.authenticate(session, form_data.username, form_data.password)
+    if user is None or user.id is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return Token(access_token=create_access_token(user_id))
+    return Token(access_token=create_access_token(user.id))
 
 @router.get("/me", response_model=UserPublic)
 def read_me(
