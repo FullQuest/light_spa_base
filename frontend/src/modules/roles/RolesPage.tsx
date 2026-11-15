@@ -9,6 +9,7 @@ export function RolesPage() {
   const [permissions, setPermissions] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -52,30 +53,39 @@ export function RolesPage() {
   function fields(role?: Role) {
     return <>
       <label>Название<input name="name" required maxLength={80} defaultValue={role?.name ?? ''} /></label>
-      {Object.entries(permissions).map(([key, title]) => <label key={key}>
-        <input type="checkbox" name="permissions" value={key} defaultChecked={role?.permissions.includes(key)} /> {title}
-      </label>)}
-      <button type="submit">{role ? 'Сохранить' : 'Создать'}</button>
+      <div className="role-permissions">
+        {Object.entries(permissions).map(([key, title]) => <label key={key}>
+          <input type="checkbox" name="permissions" value={key} defaultChecked={role?.permissions.includes(key)} /> {title}
+        </label>)}
+      </div>
+      <div className="form-actions">
+        <button type="submit" className={role ? undefined : 'btn-primary'}>{role ? 'Сохранить' : 'Создать'}</button>
+        {role && role.id !== 'user' && <button type="button" className="button-danger" onClick={() => remove(role)}>Удалить</button>}
+      </div>
+      {role?.id === 'user' && <small>Роль для самостоятельной регистрации. Нельзя удалить.</small>}
     </>;
   }
 
-  return <section>
+  const editableRoles = roles?.filter((role) => role.id !== 'superadmin');
+  const filteredRoles = editableRoles?.filter((role) => role.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+
+  return <section className="admin-page">
     <h1>Роли</h1>
-    <p>Разрешения действуют для всех пользователей роли. Перед удалением роли переназначьте её пользователей.</p>
+    <p>Настройте разрешения для пользователей роли. Перед удалением переназначьте её пользователей.</p>
     {error && <p role="alert">{error}</p>}
     {!roles && !error && <p>Загрузка…</p>}
-    <form className="user-create" onSubmit={(event) => save(event)}>
+    <form className="user-create role-form" onSubmit={(event) => save(event)}>
       <h2>Новая роль</h2>
       <fieldset disabled={!roles || busy}>{fields()}</fieldset>
     </form>
-    {roles?.map((role) => <form className="user-create" key={role.id} onSubmit={(event) => save(event, role)}>
-      {role.id === 'superadmin' ? <>
-        <h2>{role.name}</h2><p>Системная роль. Полный доступ ко всем возможностям.</p>
-      </> : <fieldset disabled={busy}>
-        {fields(role)}
-        {role.id === 'user' ? <small>Системная роль для регистрации. Нельзя удалить.</small> :
-          <button type="button" onClick={() => remove(role)}>Удалить</button>}
-      </fieldset>}
+    {roles && <>
+      <label className="role-search">Поиск ролей<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название роли" /></label>
+      <p aria-live="polite">Найдено: {filteredRoles?.length} из {editableRoles?.length}</p>
+    </>}
+    {filteredRoles?.length === 0 && <p className="empty-state">Роли не найдены. Измените условия поиска.</p>}
+    {filteredRoles?.map((role) => <form className="user-create role-form" key={role.id} onSubmit={(event) => save(event, role)}>
+      <h2>{role.name}</h2>
+      <fieldset disabled={busy}>{fields(role)}</fieldset>
     </form>)}
   </section>;
 }

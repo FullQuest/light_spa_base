@@ -1,29 +1,39 @@
-.user-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+.admin-page { display: grid; gap: 24px; min-width: 0; }
+.admin-page > h1 { margin-bottom: 0; }
+.admin-page > [role='alert'] { margin: 0; }
+.user-create { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.user-create > fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 16px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.user-create label:not(.check-field) { display: grid; gap: 6px; font-size: 14px; min-width: 0; }
+.user-create input:not([type='checkbox']), .user-create select { width: 100%; }
+.check-field { display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 40px; }
+.user-create button { justify-self: start; }
+.user-filters { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 12px; align-items: end; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.user-filters label { display: grid; gap: 6px; font-size: 14px; min-width: 0; }
+.user-filters input, .user-filters select { width: 100%; }
+.user-list { border: 1px solid var(--border); border-radius: 10px; padding: 0 20px; background: var(--surface); }
+.user-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(340px, 1.5fr); align-items: center; gap: 20px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.user-row:last-child { border-bottom: 0; }
+.user-name { min-width: 0; overflow-wrap: anywhere; }
+.user-name small { display: block; margin-top: 4px; }
+.user-row fieldset { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 12px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.user-row .role-field { display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.user-row select { width: 100%; }
+.user-row button { font-size: 14px; min-height: 40px; }
+.role-form > fieldset { display: grid; grid-template-columns: 1fr; }
+.role-permissions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; }
+.role-form .role-permissions label { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.role-search { display: grid; gap: 6px; max-width: 420px; font-size: 14px; }
+.empty-state { padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
+@media (max-width: 760px) {
+  .user-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-row { grid-template-columns: 1fr; gap: 12px; }
 }
-.user-name { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
-.user-name small { display: block; }
-.user-row fieldset, .user-create fieldset {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  border: 0;
-  margin: 0;
-  padding: 0;
+@media (max-width: 480px) {
+  .user-create { padding: 16px; }
+  .user-create > fieldset, .user-filters, .role-permissions { grid-template-columns: 1fr; }
+  .user-list { padding: 0 16px; }
+  .user-row fieldset { grid-template-columns: minmax(0, 1fr) auto; }
+  .user-row .role-field { grid-column: 1 / -1; }
+  .user-row button { justify-self: end; }
 }
-.user-row select, .user-row button { font: inherit; font-size: 14px; padding: 6px; }
-.user-create { padding: 20px 0; border-bottom: 1px solid var(--border); }
-.user-create label { display: block; font-size: 14px; }
-.user-create input:not([type='checkbox']), .user-create select {
-  display: block;
-  max-width: 100%;
-  font: inherit;
-  padding: 6px;
-}
-.user-create button { font: inherit; font-size: 14px; padding: 6px 12px; }

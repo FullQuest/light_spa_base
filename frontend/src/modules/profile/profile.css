@@ -1,6 +1,6 @@
 .profile-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 640px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -26,11 +26,11 @@
   border-top: none;
 }
 
-.profile-row-label {
+.profile-row > span:first-child {
   color: var(--text);
 }
 
-.profile-row-value {
+.profile-row > span:last-child {
   color: var(--text-h);
   font-weight: 500;
   text-align: right;

@@ -12,6 +12,9 @@ export function UsersPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -71,8 +74,14 @@ export function UsersPage() {
 
   const assignableRoles = roles.filter((role) => role.id !== 'superadmin' || user?.role === 'superadmin');
 
+  const search = query.trim().toLocaleLowerCase();
+  const filteredUsers = users?.filter((item) =>
+    (!search || `${item.full_name ?? ''} ${item.email}`.toLocaleLowerCase().includes(search)) &&
+    (!roleFilter || item.role === roleFilter) &&
+    (!statusFilter || item.is_active === (statusFilter === 'active')));
+
   return (
-    <section>
+    <section className="admin-page">
       <h1>Пользователи</h1>
       {error && <p role="alert">{error}</p>}
       {users && <form className="user-create" onSubmit={create}>
@@ -82,34 +91,50 @@ export function UsersPage() {
           <label>Имя<input name="full_name" /></label>
           <label>Пароль<input name="password" type="password" required minLength={8} maxLength={128} autoComplete="new-password" /></label>
           <label>Роль
-            <select name="role" defaultValue="user">
+            <select aria-label="Роль нового пользователя" name="role" defaultValue="user">
               {assignableRoles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
             </select>
           </label>
-          <label><input name="is_active" type="checkbox" defaultChecked /> Активен</label>
-          <button type="submit">{creating ? 'Создание…' : 'Создать'}</button>
+          <label className="check-field"><input name="is_active" type="checkbox" defaultChecked /> Активен</label>
+          <button type="submit" className="btn-primary">{creating ? 'Создание…' : 'Создать'}</button>
         </fieldset>
       </form>}
       {!users && !error && <p>Загрузка…</p>}
-      {users?.map((item) => (
+      {users && <>
+        <div className="user-filters">
+          <label>Поиск пользователей<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя или email" /></label>
+          <label>Роль<select aria-label="Фильтр по роли" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+            <option value="">Все роли</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+          </select></label>
+          <label>Статус<select aria-label="Фильтр по статусу" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">Все пользователи</option><option value="active">Активные</option><option value="blocked">Заблокированные</option>
+          </select></label>
+          <button type="button" onClick={() => { setQuery(''); setRoleFilter(''); setStatusFilter(''); }}>Сбросить</button>
+        </div>
+        <p aria-live="polite">Найдено: {filteredUsers?.length} из {users.length}</p>
+      </>}
+      {filteredUsers?.length === 0 && <p className="empty-state">Пользователи не найдены. Измените условия поиска.</p>}
+      <div className={filteredUsers?.length ? "user-list" : undefined}>
+      {filteredUsers?.map((item) => (
         <form className="user-row" key={`${item.id}:${item.role}:${item.is_active}`} onSubmit={(event) => save(event, item.id)}>
           <div className="user-name">
             <strong>{item.full_name || item.email}</strong>
             <small>{item.email}{item.id === user?.id ? ' (вы)' : ''}</small>
           </div>
           <fieldset disabled={creating || saving !== null || (item.id === user?.id || (item.role === "superadmin" && user?.role !== "superadmin"))}>
-            <label>
+            <label className="role-field">
               Роль{' '}
               <select name="role" defaultValue={item.role}>
                 {item.role === "superadmin" && user?.role !== "superadmin" && <option value="superadmin">{item.role_name}</option>}
                 {assignableRoles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
               </select>
             </label>
-            <label><input type="checkbox" name="is_active" defaultChecked={item.is_active} /> Активен</label>
+            <label className="check-field"><input type="checkbox" name="is_active" defaultChecked={item.is_active} /> Активен</label>
             <button type="submit">{saving === item.id ? 'Сохранение…' : 'Сохранить'}</button>
           </fieldset>
         </form>
       ))}
+      </div>
     </section>
   );
 }
