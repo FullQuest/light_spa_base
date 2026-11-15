@@ -1,0 +1,23 @@
+.sources-page { display: grid; gap: 20px; min-width: 0; }
+.sources-page > h1 { margin-bottom: 0; }
+.source-form, .source-list article, .source-snapshot { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; min-width: 0; }
+.source-form { display: grid; gap: 14px; }
+.source-form fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: end; border: 0; margin: 0; padding: 0; min-width: 0; }
+.source-form label { display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.source-form input, .source-form select { width: 100%; }
+.source-form .source-check { display: flex; gap: 8px; align-items: center; min-height: 40px; }
+.source-form input[type='checkbox'] { width: 16px; }
+.source-form button, .source-refresh { justify-self: start; }
+.source-list { display: grid; gap: 16px; }
+.source-list article { display: grid; gap: 8px; }
+.source-list h2 { margin: 0; }
+.source-times { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.source-times dd { margin: 6px 0 0; color: var(--text-h); }
+.source-times dt { font-size: 14px; }
+.source-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.source-snapshot pre { max-height: 600px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; border-radius: 7px; background: var(--code-bg); }
+.source-empty { padding: 24px; border: 1px dashed var(--border); border-radius: 8px; }
+@media (max-width: 600px) { .source-form fieldset, .source-times { grid-template-columns: 1fr; } }
+
+.source-form .source-weekdays { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; }
+.source-weekdays label { display: flex; align-items: center; gap: 6px; }

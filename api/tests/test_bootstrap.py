@@ -9,6 +9,25 @@ import unittest
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_source_settings_and_snapshot_survive_restart(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Path(folder) / "sources.sqlite3"
+            self.initialize(database)
+            with closing(sqlite3.connect(database)) as connection, connection:
+                connection.execute('''INSERT INTO source
+                    (id, name, url, auth_type, token, interval_seconds, enabled, status, payload,
+                     last_success_at, next_poll_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    ("a" * 32, "Saved", "http://example.test/data", "bearer", "fixture-token", 300, 0,
+                     "success", '{"value": 42}', "2026-01-01 10:00:00", None))
+                connection.execute("INSERT INTO sourceschedule (source_id, time, weekdays) VALUES (?, ?, ?)",
+                                   ("a" * 32, "09:15", "[0, 2, 4]"))
+            self.initialize(database)
+            with closing(sqlite3.connect(database)) as connection:
+                self.assertEqual(connection.execute("SELECT name, token, enabled, payload, last_success_at FROM source").fetchone(),
+                                 ("Saved", "fixture-token", 0, '{"value": 42}', "2026-01-01 10:00:00"))
+                self.assertEqual(connection.execute("SELECT time, weekdays FROM sourceschedule").fetchone(), ("09:15", "[0, 2, 4]"))
+
     def initialize(self, database, **config):
         env = {**os.environ, "DATABASE_URL": f"sqlite:///{database.as_posix()}",
                "SECRET_KEY": "isolated-bootstrap-test-key-at-least-32-bytes",

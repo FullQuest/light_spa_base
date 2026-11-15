@@ -23,6 +23,7 @@ from urllib.request import Request, urlopen
 
 class ApiTestCase(unittest.TestCase):
     registration_enabled = "true"
+    request_timeout = 5
 
     @classmethod
     def setUpClass(cls):
@@ -72,7 +73,7 @@ class ApiTestCase(unittest.TestCase):
         if token:
             headers["Authorization"] = f"Bearer {token}"
         try:
-            response = urlopen(Request(self.base + path, body, headers, method=method), timeout=5)
+            response = urlopen(Request(self.base + path, body, headers, method=method), timeout=self.request_timeout)
         except HTTPError as error:
             response = error
         with response:

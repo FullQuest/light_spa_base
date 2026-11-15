@@ -45,3 +45,4 @@ docker compose -f compose.yaml up --build
 - [Устройство фронтенда](frontend/README.md): карта компонентов, навигация, сессия и запросы к API.
 - [Документы](api/modules/documents/README.md): форматы, хранение, просмотр оригиналов и ограничения извлечения.
 - [Поиск](api/modules/search/README.md): поиск внутри доступных документов, фрагменты и ограничения.
+- [Источники](api/modules/sources/README.md): подключение JSON API, авторизация, ручной и автоматический опрос.

@@ -7,6 +7,8 @@ PERMISSIONS = {
     "users.manage": "Управление пользователями",
     "documents.view": "Просмотр документов",
     "documents.manage": "Загрузка и удаление документов",
+    "sources.view": "Просмотр данных источников",
+    "sources.manage": "Настройка и опрос источников",
 }
 
 
