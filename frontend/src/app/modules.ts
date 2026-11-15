@@ -8,6 +8,8 @@ import { DocumentPage } from '../modules/documents/DocumentPage';
 import { SearchPage } from '../modules/search/SearchPage';
 import { SourcesPage } from '../modules/sources/SourcesPage';
 import { SourcePage } from '../modules/sources/SourcePage';
+import { RequestsPage } from '../modules/requests/RequestsPage';
+import { RequestPage } from '../modules/requests/RequestPage';
 
 interface AppModule {
   path: string;
@@ -21,7 +23,7 @@ interface AppModule {
 
 // Запись подключает меню и страницу; без ограничений раздел доступен всем вошедшим.
 // enabled: false отключает страницу, menu: false только скрывает ссылку из меню.
-export const features = { profile: true, users: true, roles: true, documents: true, search: true, sources: true };
+export const features = { profile: true, users: true, roles: true, documents: true, search: true, sources: true, requests: true };
 
 export const modules: AppModule[] = [
   { path: '/', title: 'Главная', Page: HomePage },
@@ -33,4 +35,6 @@ export const modules: AppModule[] = [
   { path: '/search', title: 'Поиск', Page: SearchPage, permission: 'documents.view', enabled: features.search && features.documents },
   { path: '/sources', title: 'Источники', Page: SourcesPage, permission: 'sources.view', enabled: features.sources },
   { path: '/sources/:id', title: 'Источник', Page: SourcePage, permission: 'sources.view', enabled: features.sources, menu: false },
+  { path: '/requests', title: 'Заявки', Page: RequestsPage, permission: 'requests.view', enabled: features.requests },
+  { path: '/requests/:id', title: 'Заявка', Page: RequestPage, permission: 'requests.view', enabled: features.requests, menu: false },
 ];

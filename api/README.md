@@ -24,11 +24,13 @@ FastAPI принимает запросы, SQLModel описывает данн�
 | [documents/](modules/documents/README.md) | Загрузка, хранение, извлечение текста и таблиц, выдача оригиналов |
 | [search/](modules/search/README.md) | Поиск по названиям и тексту доступных документов, фрагменты и приоритет результатов |
 | [sources/](modules/sources/README.md) | Подключение JSON API, ручной опрос и таймер, последний успешный ответ |
+| [requests/](modules/requests/README.md) | Пример бизнес-модуля: заявки, исполнитель, статусы, CRUD и фильтры |
 | [tests/test_auth.py](tests/test_auth.py) | HTTP-тесты авторизации, регистрации, пользователей и доступа |
 | [tests/test_bootstrap.py](tests/test_bootstrap.py) | Начальные данные и сохранение состояния после перезапуска |
 | [tests/test_documents.py](tests/test_documents.py) | Форматы документов, оригиналы, ошибки и права доступа |
 | [tests/test_search.py](tests/test_search.py) | Поиск, специальные символы, фрагменты и индивидуальные доступы |
 | [tests/test_sources.py](tests/test_sources.py) | Источники, ошибки сети/JSON, авторизация, таймер и права |
+| [tests/test_requests.py](tests/test_requests.py) | CRUD заявок, фильтры, серверный автор и права |
 | [requirements.txt](requirements.txt) | Закреплённые зависимости Python |
 | [Dockerfile](Dockerfile) | Python 3.13, установка зависимостей, запуск `uvicorn main:app` |
 | [.dockerignore](.dockerignore) | Исключение локальных данных и кешей из образа |

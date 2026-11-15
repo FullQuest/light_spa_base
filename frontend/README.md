@@ -32,6 +32,9 @@ React отображает интерфейс, React Router обрабатыва
 | [sources/SourcesPage.tsx](src/modules/sources/SourcesPage.tsx) | Список источников и создание подключения |
 | [sources/SourcePage.tsx](src/modules/sources/SourcePage.tsx) | Последний JSON, состояние опроса, редактирование и удаление |
 | [sources/SourceForm.tsx](src/modules/sources/SourceForm.tsx) | Общая форма URL, интервала, авторизации и автоопроса |
+| [requests/RequestsPage.tsx](src/modules/requests/RequestsPage.tsx) | Пример списка карточек с поиском, фильтрами и созданием |
+| [requests/RequestPage.tsx](src/modules/requests/RequestPage.tsx) | Карточка заявки, редактирование и удаление |
+| [requests/RequestForm.tsx](src/modules/requests/RequestForm.tsx) | Общая форма названия, описания, статуса и исполнителя |
 
 Пути `app/`, `auth/` и `shared/` находятся в `src/`, страницы — в `src/modules/`.
 

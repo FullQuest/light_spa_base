@@ -46,3 +46,4 @@ docker compose -f compose.yaml up --build
 - [Документы](api/modules/documents/README.md): форматы, хранение, просмотр оригиналов и ограничения извлечения.
 - [Поиск](api/modules/search/README.md): поиск внутри доступных документов, фрагменты и ограничения.
 - [Источники](api/modules/sources/README.md): подключение JSON API, авторизация, ручной и автоматический опрос.
+- [Заявки](api/modules/requests/README.md): пример бизнес-модуля для копирования — карточки, CRUD, исполнитель и фильтры.

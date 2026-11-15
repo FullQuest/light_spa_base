@@ -9,6 +9,8 @@ PERMISSIONS = {
     "documents.manage": "Загрузка и удаление документов",
     "sources.view": "Просмотр данных источников",
     "sources.manage": "Настройка и опрос источников",
+    "requests.view": "Просмотр заявок",
+    "requests.manage": "Создание и изменение заявок",
 }
 
 
