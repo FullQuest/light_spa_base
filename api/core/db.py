@@ -2,16 +2,13 @@ import os
 from collections.abc import Generator
 from sqlmodel import Session, create_engine
 
-# DATABASE_URL задан в compose.yaml как sqlite:////api/data/db.sqlite3
-# (volume ./db монтируется в /api/data). Раньше здесь был жёстко прописан
-# путь /app/data/db.sqlite3 — такого каталога в контейнере нет, из-за чего
-# create_engine().connect() падал на старте, uvicorn не поднимался,
-# и nginx/vite возвращали 502 Bad Gateway на /auth/*.
+# В контейнере /api/data связан с локальным каталогом db через Compose.
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "sqlite:////api/data/db.sqlite3",
 )
 
+# FastAPI может использовать соединение SQLite из разных потоков.
 connect_args = (
     {"check_same_thread": False}
     if DATABASE_URL.startswith("sqlite")

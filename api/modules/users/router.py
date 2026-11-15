@@ -3,30 +3,33 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from core.db import get_session
+from core.config import settings
 from . import service
 from .models import User, UserCreate, UserPublic, Token
-from .dependencies import create_access_token, get_current_active_user
+from .dependencies import create_access_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.get("/config")
+def auth_config():
+    return {"registration_enabled": settings.REGISTRATION_ENABLED}
 
 @router.post("/register", response_model=UserPublic)
 def register(
     user_create: UserCreate,
     session: Annotated[Session, Depends(get_session)],
 ):
-    if service.get_user_by_email(session, user_create.email):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
-    return service.create_user(session, user_create)
+    if not settings.REGISTRATION_ENABLED:
+        raise HTTPException(status_code=403, detail="Самостоятельная регистрация отключена")
+    # Роль и активность из публичного запроса не принимаем: создаётся обычный user.
+    return service.public_user(session, service.create_user(session, user_create))
 
 @router.post("/login", response_model=Token)
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: Annotated[Session, Depends(get_session)],
 ):
-    user = service.authenticate(session, form_data.username, form_data.password)
+    user = service.authenticate(session, form_data.username.strip(), form_data.password)
     if user is None or user.id is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -37,6 +40,7 @@ def login(
 
 @router.get("/me", response_model=UserPublic)
 def read_me(
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
 ):
-    return current_user
+    return service.public_user(session, current_user)

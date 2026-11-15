@@ -4,6 +4,9 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////api/data/db.sqlite3}
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - ADMIN_LOGIN=${ADMIN_LOGIN-admin1}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD-12345678}
+      - REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-true}
     volumes:
       - ./db:/api/data
     expose:
@@ -27,5 +30,5 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
-      - frontend # Nginx должен стартовать после фронтенда
+      - frontend
     restart: unless-stopped

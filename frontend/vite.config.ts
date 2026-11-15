@@ -4,12 +4,12 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // Чтобы dev-сервер был доступен извне контейнера
+    host: '0.0.0.0', // Доступ к Vite с компьютера и из контейнера Nginx.
     port: 5173,
     proxy: {
-      // Все запросы, начинающиеся с /auth, будут перенаправлены на FastAPI
-      '/auth': {
-        target: 'http://api:8000', // Имя сервиса в docker-compose
+      // При прямом открытии Vite запросы /api тоже должны попадать в FastAPI.
+      '/api': {
+        target: 'http://api:8000',
         changeOrigin: true,
       },
     },

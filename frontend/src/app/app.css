@@ -1,0 +1,9 @@
+.page-loading { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.dashboard { min-height: 100vh; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.topbar-brand { font-weight: 600; color: var(--text-h); }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 16px; }
+.topbar a { color: var(--text); text-decoration: none; }
+.topbar a[aria-current='page'] { color: var(--accent); }
+.btn-link { background: transparent; color: var(--text-h); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.dashboard-main { flex: 1; width: 100%; max-width: 900px; margin: 0 auto; padding: 32px 24px; text-align: left; overflow-wrap: anywhere; }

@@ -1,47 +1,44 @@
-### Подготовка окружения
+# Light SPA Base
 
-Перед первым запуском создайте `.env` в корне проекта на основе `.env.example`.
+Заготовка: React + TypeScript, FastAPI, SQLite и Docker Compose.
+Готовы вход, регистрация, профиль, управление пользователями и настраиваемые роли.
+Разделы можно отключать, а доступ к ним задавать разрешениями.
 
-### Запуск для разработки
+## Первый запуск
 
-Выполняйте команды из корня проекта:
+Нужны Docker Compose и Python для генерации ключа. Команды выполняются из корня проекта.
+Создайте `.env`, если его ещё нет:
+
+```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Вставьте полученный ключ в `SECRET_KEY` в `.env`.
+Первый суперадминистратор по умолчанию: **admin1 / 12345678**.
+Начальные данные можно изменить в `.env` до первого запуска.
+Локальные `.env` и база `db/db.sqlite3` исключены из Git.
+
+## Запуск
+
+Разработка с перезагрузкой API и Vite:
 
 ```powershell
 docker compose up --build
 ```
 
-Compose автоматически объединяет `compose.yaml` и `compose.override.yaml`.
-API запускается с перезагрузкой, фронтенд — через Vite. Nginx использует
-`nginx/nginx.dev.conf`, который направляет запросы к Vite на порт 5173.
-
-- Приложение через Nginx: http://localhost/ или http://localhost:8080/
-- Vite напрямую: http://localhost:5173/
-- Документация API: http://localhost:8080/docs
-
-Порты прямого доступа к API и Vite можно изменить через `API_PORT` и
-`FRONTEND_PORT` в `.env` (по умолчанию 8000 и 5173).
-
-### Обычный запуск
+Обычный режим с собранным фронтендом:
 
 ```powershell
 docker compose -f compose.yaml up --build
 ```
 
-Приложение доступно на http://localhost/, документация — на http://localhost/docs.
-Собранный фронтенд раздаётся Nginx внутри контейнера `frontend` на порту 80.
-Для обычного и dev-режимов используются разные образы фронтенда:
-`light-spa-frontend:prod` и `light-spa-frontend:dev`.
+- Приложение: http://localhost/ (в dev также http://localhost:8080/).
+- Документация API: http://localhost/docs.
+- Vite напрямую, только dev: http://localhost:5173/.
 
+## Документация
 
-### Стэк проекта
-- node 22
-- vite
-- react typescript
-
-- uvicorn
-- python 3.13.18
-- FastAPI
-- SQLite
-
-- nginx
-- docker
+- [Разработка](docs/development.md): PyCharm, страницы, навигация, подключение модулей и проверки.
+- [Устройство API](api/README.md): карта файлов, обработка запросов, настройки, пользователи и роли.
+- [Устройство фронтенда](frontend/README.md): карта компонентов, навигация, сессия и запросы к API.

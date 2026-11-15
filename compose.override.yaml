@@ -13,10 +13,10 @@ services:
     image: light-spa-frontend:dev
     build:
       context: ./frontend
-      target: build # Используем только этап сборки, чтобы запустить dev-сервер
+      target: build # Этап с Node.js; финальный образ содержит только Nginx.
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Анонимный volume, чтобы не перезаписывать node_modules
+      - /app/node_modules # Зависимости контейнера не подменяются файлами с компьютера.
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
