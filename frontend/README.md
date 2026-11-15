@@ -28,6 +28,7 @@ React отображает интерфейс, React Router обрабатыва
 | [documents/DocumentPage.tsx](src/modules/documents/DocumentPage.tsx) | Оригинал, извлечённый текст и таблицы, скачивание и удаление |
 | [documents/documents.ts](src/modules/documents/documents.ts) | Типы, статусы и скачивание оригиналов через Blob |
 | [documents/AccessSettings.tsx](src/modules/documents/AccessSettings.tsx) | Выбор получателей при загрузке и изменение доступа в карточке |
+| [search/SearchPage.tsx](src/modules/search/SearchPage.tsx) | Поиск по документам, подсветка, состояния запроса и возврат из карточки |
 
 Пути `app/`, `auth/` и `shared/` находятся в `src/`, страницы — в `src/modules/`.
 

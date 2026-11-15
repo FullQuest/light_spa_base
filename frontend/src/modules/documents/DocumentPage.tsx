@@ -45,7 +45,9 @@ function DocumentCard({ id }: { id: string }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { search } = useLocation();
-  const back = `/documents${search}`;
+  const params = new URLSearchParams(search);
+  const fromSearch = params.get('from') === 'search';
+  const back = fromSearch ? `/search?${new URLSearchParams({ q: params.get('q') ?? '' })}` : `/documents${search}`;
   const [document, setDocument] = useState<DocumentDetail | null>(null);
   const [tab, setTab] = useState('extracted');
   const [error, setError] = useState('');
@@ -75,7 +77,7 @@ function DocumentCard({ id }: { id: string }) {
   }
 
   return <section className="documents">
-    <Link to={back}>← К документам</Link>
+    <Link to={back}>{fromSearch ? '← К поиску' : '← К документам'}</Link>
     {error && <p role="alert">{error}</p>}
     {!document && !error && <p>Загрузка…</p>}
     {document && <>

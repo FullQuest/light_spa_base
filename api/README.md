@@ -22,9 +22,11 @@ FastAPI принимает запросы, SQLModel описывает данн�
 | [roles/router.py](modules/roles/router.py) | Список, создание, изменение и удаление ролей |
 | [roles/service.py](modules/roles/service.py) | Получение роли, вычисление разрешений и первичная инициализация |
 | [documents/](modules/documents/README.md) | Загрузка, хранение, извлечение текста и таблиц, выдача оригиналов |
+| [search/](modules/search/README.md) | Поиск по названиям и тексту доступных документов, фрагменты и приоритет результатов |
 | [tests/test_auth.py](tests/test_auth.py) | HTTP-тесты авторизации, регистрации, пользователей и доступа |
 | [tests/test_bootstrap.py](tests/test_bootstrap.py) | Начальные данные и сохранение состояния после перезапуска |
 | [tests/test_documents.py](tests/test_documents.py) | Форматы документов, оригиналы, ошибки и права доступа |
+| [tests/test_search.py](tests/test_search.py) | Поиск, специальные символы, фрагменты и индивидуальные доступы |
 | [requirements.txt](requirements.txt) | Закреплённые зависимости Python |
 | [Dockerfile](Dockerfile) | Python 3.13, установка зависимостей, запуск `uvicorn main:app` |
 | [.dockerignore](.dockerignore) | Исключение локальных данных и кешей из образа |
