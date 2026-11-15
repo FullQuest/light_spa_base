@@ -1,0 +1,28 @@
+.documents { display: grid; gap: 18px; min-width: 0; }
+.documents h1 { font-size: 36px; line-height: 1.2; overflow-wrap: anywhere; }
+.document-upload, .document-list article { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.document-upload label { display: grid; gap: 8px; }
+.document-upload input { max-width: 100%; min-width: 0; }
+.documents button { padding: 8px 14px; cursor: pointer; }
+.documents button:disabled { cursor: wait; }
+.document-upload button { justify-self: start; }
+.document-list { display: grid; gap: 12px; }
+.document-list small { display: block; }
+.document-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.document-actions [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.document-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 16px; background: var(--code-bg); border-radius: 8px; max-height: 650px; overflow: auto; }
+.document-table { max-width: 100%; overflow-x: auto; }
+.document-table table { border-collapse: collapse; }
+.document-table td { border: 1px solid var(--border); padding: 8px 12px; white-space: pre-wrap; }
+.document-pdf { width: 100%; height: 650px; border: 1px solid var(--border); }
+.document-warnings { margin: 0; padding-left: 24px; }
+
+.document-upload fieldset, .document-access > fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; min-width: 0; }
+.document-access-fields { display: grid; gap: 10px; min-width: 0; }
+.document-access-fields > label { display: grid; gap: 6px; }
+.document-access-fields fieldset { max-height: 240px; overflow: auto; display: grid; gap: 8px; min-width: 0; }
+.document-access-fields fieldset label { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+.document-access { border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: grid; gap: 12px; }
+.document-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+.document-filters label { display: grid; gap: 6px; max-width: 100%; }
+.document-filters input, .document-filters select, .document-access-fields select { max-width: 100%; padding: 6px; }

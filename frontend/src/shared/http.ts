@@ -8,7 +8,7 @@ export class HttpError extends Error {
 }
 
 // Пути передаются без /api; токен добавляет authRequest из auth/api.ts.
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit, responseType: 'json' | 'blob' = 'json'): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, init);
@@ -26,5 +26,6 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new HttpError(response.status, message);
   }
   if (response.status === 204) return undefined as T;
+  if (responseType === 'blob') return response.blob() as Promise<T>;
   return response.json() as Promise<T>;
 }

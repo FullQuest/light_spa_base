@@ -9,6 +9,7 @@ services:
       - REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-true}
     volumes:
       - ./db:/api/data
+      - ./storage:/api/storage
     expose:
       - "8000"
     restart: unless-stopped

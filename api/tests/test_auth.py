@@ -3,6 +3,7 @@
 Тесты запускают отдельный процесс API с временной SQLite-базой.
 Рабочая база приложения и её аккаунты не изменяются.
 """
+from contextlib import closing
 import json
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -36,6 +37,7 @@ class ApiTestCase(unittest.TestCase):
                "SECRET_KEY": "isolated-auth-test-key-at-least-32-bytes",
                "ADMIN_LOGIN": "admin1", "ADMIN_PASSWORD": "12345678",
                "REGISTRATION_ENABLED": cls.registration_enabled}
+        env["DOCUMENTS_DIR"] = str(Path(cls.temp.name) / "documents")
         cls.process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port)],
             cwd=Path(__file__).resolve().parents[1], env=env,
@@ -107,7 +109,7 @@ class AuthTests(ApiTestCase):
             self.assertEqual(headers["WWW-Authenticate"], "Bearer")
             self.assertNotIn("access_token", result)
         _, token, _ = self.login("inactive@example.com")
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute('UPDATE user SET is_active = 0 WHERE email = ?', ("inactive@example.com",))
         self.assertEqual(self.login("inactive@example.com")[0], 401)
         self.assertEqual(self.request("/api/auth/me", token=token["access_token"])[0], 401)
@@ -252,7 +254,7 @@ class RegistrationDisabledTests(ApiTestCase):
         self.assertEqual(status, 200)
         self.assertEqual(config, {"registration_enabled": False})
         self.assertEqual(self.register("blocked@example.com")[0], 403)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT count(*) FROM user WHERE email='blocked@example.com'").fetchone()[0], 0)
         status, result, _ = self.login("admin1", "12345678")
         self.assertEqual(status, 200)

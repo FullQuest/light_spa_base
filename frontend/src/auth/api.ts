@@ -32,11 +32,11 @@ export function getMe(token: string) {
 }
 
 // Защищённые запросы модулей: токен добавляется здесь, а не в каждой странице.
-export function authRequest<T>(path: string, init: RequestInit = {}) {
+export function authRequest<T>(path: string, init: RequestInit = {}, responseType: 'json' | 'blob' = 'json') {
   const headers = new Headers(init.headers);
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return request<T>(path, { ...init, headers }).catch((err: unknown) => {
+  return request<T>(path, { ...init, headers }, responseType).catch((err: unknown) => {
     if (err instanceof HttpError && (err.status === 401 || err.status === 403)) {
       window.dispatchEvent(new Event("auth-refresh"));
     }

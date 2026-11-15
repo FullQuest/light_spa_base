@@ -5,6 +5,8 @@ from sqlmodel import SQLModel, Field
 # Новые возможности модулей добавляются здесь.
 PERMISSIONS = {
     "users.manage": "Управление пользователями",
+    "documents.view": "Просмотр документов",
+    "documents.manage": "Загрузка и удаление документов",
 }
 
 
