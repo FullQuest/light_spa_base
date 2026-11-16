@@ -9,8 +9,7 @@ export function RequestForm({ item, people, onSaved }: { item?: RequestItem; peo
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
+    const data = new FormData(event.currentTarget);
     setBusy(true); setError('');
     try {
       const result = await authRequest<RequestItem>(item ? `/requests/${item.id}` : '/requests', {
@@ -20,7 +19,6 @@ export function RequestForm({ item, people, onSaved }: { item?: RequestItem; peo
       });
       onSaved(result);
     } catch (err) {
-      if (item) form.reset();
       setError(err instanceof Error ? err.message : 'Не удалось сохранить заявку');
     } finally { setBusy(false); }
   }
