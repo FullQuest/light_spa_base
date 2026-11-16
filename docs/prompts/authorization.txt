@@ -1,0 +1,56 @@
+Подготовь контекст сессии для вопросов и изменений авторизации, сессии и прав доступа в Light SPA Base. Конкретный вопрос или задачу пришлю следующим запросом.
+
+СОКРАЩЁННАЯ СТРУКТУРА ПРОЕКТА
+api/
+  main.py — сборка FastAPI, таблицы, начальные роли и администратор
+  core/{config,db}.py — settings, engine и get_session
+  modules/
+    users/{models,router,service,dependencies,bootstrap}.py
+    user_admin/router.py — создание аккаунтов, роль и блокировка
+    roles/{models,service,router}.py — роли и каталог прав
+    requests/, documents/, search/, sources/ — бизнес-модули
+  tests/{test_auth,test_bootstrap}.py — проверки авторизации и инициализации
+frontend/src/
+  main.tsx — точка входа и BrowserRouter
+  app/App.tsx — AuthProvider, выбор входа или оболочки
+  app/Layout.tsx — меню и маршруты
+  app/modules.ts — реестр страниц и canOpenModule
+  auth/auth.ts — AuthContext и useAuth
+  auth/types.ts — UserPublic, TokenResponse, Role
+  auth/api.ts — токен и HTTP-вызовы авторизации
+  auth/AuthProvider.tsx — состояние и обновление сессии
+  auth/AuthPage.tsx — форма входа и регистрации
+  shared/http.ts — fetch, ответы и ошибки
+  modules/{users,roles}/ — административные страницы
+compose.yaml, compose.override.yaml, nginx/ — запуск и прокси
+
+КОНТРАКТЫ НЕПРИЛОЖЕННЫХ ФАЙЛОВ
+Это справка по текущему проекту. Используй её как предоставленный контракт. При расхождении с приложенным кодом сообщи о расхождении и опирайся на код.
+
+1. core.config.settings: SECRET_KEY обязателен из окружения, ALGORITHM = 'HS256', ACCESS_TOKEN_EXPIRE_MINUTES из окружения (по умолчанию 1440), REGISTRATION_ENABLED из окружения (по умолчанию true). ADMIN_LOGIN и ADMIN_PASSWORD используются при создании первого администратора. Значения по умолчанию не подтверждают локальные настройки пользователя.
+2. core.db экспортирует engine и get_session(): with Session(engine) as session: yield session. В main.py вызываются create_all, init_roles и init_superadmin. Инициализация администратора пропускается при пустом логине или пароле и не меняет аккаунт, если такой логин уже существует.
+3. В roles/models.py: Role содержит id: str (первичный ключ), name: str и permissions: list[str] в JSON-колонке. PERMISSIONS — словарь ключ → описание: users.manage, documents.view, documents.manage, sources.view, sources.manage, requests.view, requests.manage. RoleWrite принимает только права из каталога. Новые ключи добавляются в этот словарь; обычным ролям их назначают отдельно. Поведение superadmin и начальных ролей показано в приложенном roles/service.py.
+4. Клиентский UserPublic = { id: number; email: string; full_name: string | null; role: string; role_name: string; permissions: string[]; is_active: boolean }. TokenResponse = { access_token: string; token_type: string }. Role = { id: string; name: string; permissions: string[] }.
+5. auth/auth.ts экспортирует AuthContext и useAuth(). Контекст: user: UserPublic | null, loading: boolean, error: string | null, login(email, password): Promise<void>, register(email, fullName, password): Promise<void>, logout(): void.
+6. app/App.tsx оборачивает содержимое в AuthProvider. Пока loading — загрузка; при error — ошибка с повторной загрузкой и переходом ко входу; при user — Layout, иначе AuthPage. main.tsx обеспечивает BrowserRouter. AuthPage использует функции контекста и получает доступность регистрации через getAuthConfig.
+7. app/modules.ts содержит записи { path, title, Page, permission?, superadminOnly?, enabled?, menu? }. canOpenModule проверяет enabled !== false, роль superadmin при superadminOnly и наличие permission в user.permissions. Layout скрывает недоступные ссылки; для известного запрещённого маршрута показывает «Нет доступа», для отключённого или неизвестного — «Страница не найдена». menu: false скрывает ссылку, сохраняя маршрут. Это интерфейсные проверки; сервер защищает данные независимо.
+
+ПРИЛОЖЕННЫЕ 8 ФАЙЛОВ
+api/modules/users/models.py
+api/modules/users/router.py
+api/modules/users/service.py
+api/modules/users/dependencies.py
+api/modules/roles/service.py
+frontend/src/auth/api.ts
+frontend/src/auth/AuthProvider.tsx
+frontend/src/shared/http.ts
+
+После маркера дай краткую карту, до 500 слов:
+- Подтверди получение восьми файлов; назови отсутствующие или нечитаемые.
+- Проследи регистрацию, вход, профиль, хранение и передачу токена, восстановление сессии и выход.
+- Покажи, что берётся из JWT, что читается из БД, как проверяются блокировка, роли и права.
+- Укажи, когда обновляется профиль открытой вкладки; различай реакции на 401, 403 и сетевой сбой.
+- По справке покажи связь с меню и маршрутами. Различай подтверждение кодом и предоставленный контракт. Не предполагай мгновенное обновление всех вкладок, refresh-токены или серверный отзыв без реализации.
+Затем дождись задачи. Не запрашивай исходники только ради повторной проверки справки и не предлагай переписывать авторизацию заранее.
+
+Для последующих вопросов используй этот контекст. Небольшие дополнения к неприложенным файлам можно описать точными инструкциями, например добавлением ключей в PERMISSIONS. Если меняется сам контракт, административный интерфейс, конфигурация или другой непоказанный код и без него нельзя дать точный ответ, запроси только нужные актуальные исходники с причиной. Не выдавай полную замену неприложенного файла. Формат правок свободный, но указывай пути и готовый код. Не выдумывай содержимое файлов и результаты запусков.

@@ -1,0 +1,58 @@
+    Подготовь контекст сессии для создания нового модуля в Light SPA Base. Требования к модулю пришлю следующим запросом. Сейчас изучи образец и соглашения ниже.
+
+    СОКРАЩЁННАЯ СТРУКТУРА ПРОЕКТА
+    api/
+      main.py — сборка FastAPI, таблицы, начальные роли, подключение роутеров
+      core/config.py — settings из окружения
+      core/db.py — engine и get_session
+      modules/
+        users/ — модели, вход, регистрация, JWT, зависимости доступа
+        user_admin/router.py — управление аккаунтами
+        roles/{models,service,router}.py — каталог разрешений и роли
+        requests/{models,router}.py — образец бизнес-модуля
+        documents/ — загрузка, хранение и доступ к документам
+        search/ — поиск по доступным документам
+        sources/ — внешние JSON API и планировщик опроса
+      tests/ — unittest-проверки API
+    frontend/src/
+      main.tsx — точка входа и BrowserRouter
+      app/{App,Layout}.tsx — сессия, оболочка, маршруты и меню
+      app/modules.ts — реестр страниц и переключатели
+      auth/ — useAuth, AuthProvider, типы и authRequest
+      shared/http.ts — fetch, ответы и HttpError
+      index.css — общая тема
+      modules/requests/ — образец списка, карточки и формы
+      modules/{home,profile,users,roles,documents,search,sources}/
+    compose.yaml, compose.override.yaml, nginx/ — запуск и прокси
+
+    КОНТРАКТЫ ВСПОМОГАТЕЛЬНЫХ ФАЙЛОВ
+    Это справка по текущему коду проекта, заменяющая загрузку вспомогательных файлов. Используй её как предоставленный контракт. При расхождении с приложенным исходником опирайся на исходник и сообщи о расхождении.
+
+    1. Стек: FastAPI + SQLModel + SQLite; React + TypeScript + Vite + React Router. Не вводи другую архитектуру и зависимости без необходимости. В requests работа с БД находится в router.py; отдельный service.py не обязателен.
+    2. В api/main.py модели должны быть импортированы до SQLModel.metadata.create_all(engine). Роутер requests импортирован до этого вызова, а после создания app подключён через app.include_router(requests_router, prefix="/api"). Для нового модуля добавляются аналогичные импорт и подключение. Модель импортируется через роутер либо явно. create_all создаёт отсутствующие таблицы, но не мигрирует существующие.
+    3. core.db экспортирует engine и get_session(): генератор с with Session(engine) as session: yield session. Используй Depends(get_session); commit, rollback и refresh выполняет прикладной код.
+    4. modules.users.dependencies экспортирует get_current_user, require_permission("имя.права"), require_roles("роль"). Зависимости возвращают User. User содержит id, email, full_name, hashed_password, is_active, role. Автора назначай из текущего пользователя на сервере.
+    5. Новые права добавляются в существующий словарь PERMISSIONS в api/modules/roles/models.py: например "equipment.view": "Просмотр оборудования", "equipment.manage": "Управление оборудованием". Валидация ролей принимает только известные ключи. Роль хранит список permissions в БД. permissions_for(role) возвращает весь каталог для superadmin, для остальных — сохранённый список. Новое право автоматически получает только superadmin; обычным ролям его нужно назначить через управление ролями. init_roles не перезаписывает права существующих ролей. .manage не подразумевает .view: в requests изменяющие операции требуют оба права.
+    6. Страницы регистрируются в app/modules.ts: { path, title, Page, permission?, superadminOnly?, enabled?, menu? }. Запись подключает маршрут и пункт меню. enabled: false отключает маршрут; menu: false скрывает только ссылку. Карточка — отдельная запись с path вида '/equipment/:id'. canOpenModule проверяет enabled, superadminOnly и наличие permission в user.permissions. Это ограничения интерфейса; API защищается отдельно.
+    7. useAuth из '../../auth/auth' возвращает user, loading, error, login, register, logout. user может быть null. Публичный профиль: id: number, email: string, full_name: string | null, role: string, role_name: string, permissions: string[], is_active: boolean.
+    8. authRequest<T>(path, init?: RequestInit, responseType?: 'json' | 'blob') из '../../auth/api' добавляет /api и Bearer-токен из localStorage. Передавай путь БЕЗ /api. Для JSON явно задавай Content-Type и JSON.stringify(body). При 204 возвращается undefined. Ошибки бросаются как Error; HttpError из shared/http.ts также имеет status. На 401/403 authRequest инициирует обновление профиля. Страница отвечает за загрузку, данные и ошибки.
+    9. Навигация — Link, useNavigate, useParams, useSearchParams из react-router. Логика и CSS нового модуля хранятся в frontend/src/modules/<имя>/. Локальный CSS образца приложен; глобальные стили в index.css и app/app.css не приложены.
+
+    ПРИЛОЖЕННЫЕ 8 ФАЙЛОВ
+    api/modules/requests/models.py
+    api/modules/requests/router.py
+    frontend/src/modules/requests/requests.ts
+    frontend/src/modules/requests/RequestsPage.tsx
+    frontend/src/modules/requests/RequestPage.tsx
+    frontend/src/modules/requests/RequestForm.tsx
+    frontend/src/modules/requests/requests.css
+    frontend/src/app/modules.ts
+
+    После маркера кратко, до 400 слов:
+    - Подтверди получение восьми файлов; назови отсутствующие или нечитаемые.
+    - Объясни поток CRUD образца и соглашения форм, фильтров, валидации и ошибок.
+    - Назови точки подключения нового модуля и выдачи прав по справке.
+    - Отметь ограничения и расхождения. Бизнес-поля requests — образец, а не требования к будущему модулю.
+    Затем дождись задачи. Не запрашивай файлы только ради проверки контрактов выше и не придумывай будущий модуль.
+
+    Когда получишь задачу, для небольших добавлений в неприложенные файлы давай точные инструкции: что импортировать, где добавить include_router или ключи PERMISSIONS. Не выдавай полную замену неприложенного файла. Если задача меняет сам контракт или требует точного кода для сложной интеграции, запроси только соответствующие актуальные исходники с причиной. Формат изменений свободный, но указывай пути и готовый код. Не выдумывай результаты запусков и тестов.
