@@ -1,6 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router';
 import { useAuth } from '../auth/auth';
-import { modules } from './modules';
+import { canOpenModule, modules } from './modules';
 
 function RouteMessage({ title }: { title: string }) {
   return <section>
@@ -14,8 +14,7 @@ export function Layout() {
   const enabled = modules.filter((module) => module.enabled !== false);
   // Эти правила управляют интерфейсом; доступ к данным отдельно проверяет API.
   function canOpen(module: typeof modules[number]) {
-    return (!module.superadminOnly || user?.role === 'superadmin') &&
-      (!module.permission || user?.permissions.includes(module.permission));
+    return user !== null && canOpenModule(module, user);
   }
 
   return (

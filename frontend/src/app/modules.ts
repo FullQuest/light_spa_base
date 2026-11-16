@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { UserPublic } from '../auth/types';
 import { HomePage } from '../modules/home/HomePage';
 import { ProfilePage } from '../modules/profile/ProfilePage';
 import { UsersPage } from '../modules/users/UsersPage';
@@ -19,6 +20,13 @@ interface AppModule {
   superadminOnly?: boolean;
   enabled?: boolean;
   menu?: boolean;
+}
+
+// Общие правила для меню, маршрутов и перехода после входа.
+export function canOpenModule(module: AppModule, user: UserPublic) {
+  return module.enabled !== false &&
+    (!module.superadminOnly || user.role === 'superadmin') &&
+    (!module.permission || user.permissions.includes(module.permission));
 }
 
 // Запись подключает меню и страницу; без ограничений раздел доступен всем вошедшим.
