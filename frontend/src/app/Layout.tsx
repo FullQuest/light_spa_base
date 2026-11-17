@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 import { useAuth } from '../auth/auth';
+import { ThemeToggle } from './ThemeToggle';
 import { canOpenModule, modules } from './modules';
 
 function RouteMessage({ title }: { title: string }) {
@@ -27,7 +28,7 @@ export function Layout() {
             <NavLink key={module.path} to={module.path} end>{module.title}</NavLink>
           ))}
         </nav>
-        <button type="button" className="btn-link" onClick={logout}>Выйти</button>
+        <div className="topbar-actions"><ThemeToggle /><button type="button" className="btn-link" onClick={logout}>Выйти</button></div>
       </header>
       <main className="dashboard-main">
         <Suspense fallback={<p role="status">Загрузка раздела…</p>}><Routes>

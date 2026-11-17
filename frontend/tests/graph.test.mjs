@@ -226,3 +226,57 @@ test('duration handles days, minute rollover, future timestamps and invalid date
   assert.equal(formatDuration(since, start - 1000), '0 с');
   assert.equal(formatDuration('bad', start), '—');
 });
+
+import ELK from 'elkjs/lib/elk.bundled.js';
+import { connectionPorts, handleId, layoutModel, NODE_HEIGHT } from '../src/modules/graph/layoutModel.ts';
+const routingFixture = {
+  objects: ['a','b','c','d'].map(id => ({ id })),
+  dependencies: [
+    { id: 'ab-water', source: 'a', target: 'b', resource: 'water' },
+    { id: 'ab-energy', source: 'a', target: 'b', resource: 'energy' },
+    { id: 'ac', source: 'a', target: 'c', resource: 'water' },
+    { id: 'bd', source: 'b', target: 'd', resource: 'water' },
+    { id: 'cd', source: 'c', target: 'd', resource: 'water' },
+  ],
+};
+test('each dependency has a distinct stable port on each end, shared by layout and rendering', () => {
+  const ports = connectionPorts(routingFixture.dependencies);
+  assert.deepEqual(connectionPorts([...routingFixture.dependencies].reverse()), ports);
+  for (const edge of routingFixture.dependencies) {
+    assert.ok(ports[edge.source].some(port => port.id === handleId(edge.id, 'out')));
+    assert.ok(ports[edge.target].some(port => port.id === handleId(edge.id, 'in')));
+  }
+  for (const list of Object.values(ports)) for (const side of ['in', 'out']) {
+    const offsets = list.filter(port => port.side === side).map(port => port.y);
+    assert.equal(new Set(offsets).size, offsets.length);
+    assert.ok(offsets.every(y => y > 0 && y < NODE_HEIGHT));
+  }
+});
+test('orthogonal layout separates parallel resources and branch routes without shared segments', async () => {
+  const result = await new ELK().layout(layoutModel(routingFixture));
+  const segments = [];
+  for (const edge of result.edges) {
+    const section = edge.sections[0];
+    const sourceNode = result.children.find(node => node.id === routingFixture.dependencies.find(e => e.id === edge.id).source);
+    const sourcePort = sourceNode.ports.find(port => port.id === edge.sources[0]);
+    assert.equal(section.startPoint.x, sourceNode.x + sourcePort.x);
+    assert.equal(section.startPoint.y, sourceNode.y + sourcePort.y);
+    const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
+    for (let index = 1; index < points.length; index++) {
+      const a = points[index - 1], b = points[index];
+      assert.ok(a.x === b.x || a.y === b.y, 'layout should remain orthogonal');
+      segments.push({ id: edge.id, a, b });
+    }
+  }
+  for (let i = 0; i < segments.length; i++) for (let j = i + 1; j < segments.length; j++) {
+    const a = segments[i], b = segments[j];
+    if (a.id === b.id) continue;
+    for (const [fixed, along] of [['x','y'],['y','x']]) {
+      const collinear = a.a[fixed] === a.b[fixed] && b.a[fixed] === b.b[fixed] && a.a[fixed] === b.a[fixed];
+      if (!collinear) continue;
+      const overlap = Math.min(Math.max(a.a[along],a.b[along]),Math.max(b.a[along],b.b[along])) -
+        Math.max(Math.min(a.a[along],a.b[along]),Math.min(b.a[along],b.b[along]));
+      assert.ok(overlap <= 0, `edges ${a.id} and ${b.id} overlap by ${overlap}`);
+    }
+  }
+});

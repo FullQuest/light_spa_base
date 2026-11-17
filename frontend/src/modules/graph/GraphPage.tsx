@@ -11,6 +11,7 @@ import type { InfrastructureObject, ObjectState, Point, Resource } from './types
 import { useLiveGraph } from './useLiveGraph';
 import type { CurrentEvent, LiveGraph } from './snapshot';
 import { moveRoutes } from './routes';
+import { connectionPorts, handleId } from './layoutModel';
 import { IncidentClock, IncidentDuration } from './IncidentClock';
 import { incidentImpact } from './incidents';
 import { EventsPanel } from './EventsPanel';
@@ -103,6 +104,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
   const routeUpdate = useCallback((id: string, points: Point[]) => {
     dispatch(graphActions.edit({ routes: { ...prefs.routes, [id]: points }, manualRouteIds: [...new Set([...(prefs.manualRouteIds ?? []), id])] }));
   }, [dispatch, prefs.routes, prefs.manualRouteIds]);
+  const ports = useMemo(() => connectionPorts(data.dependencies), [data.dependencies]);
   const indices = useMemo(() => dependencyIndices(data), [data]);
   const districtFor = useMemo(() => new Map(prefs.groups.flatMap(group => group.members.map(id => [id, group] as const))), [prefs.groups]);
   const collapsedIds = useMemo(() => new Set(prefs.groups.filter(group => group.collapsed).flatMap(group => group.members)), [prefs.groups]);
@@ -140,7 +142,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
         zIndex: group.collapsed ? 0 : -1, className: group.collapsed ? 'district-proxy' : 'infrastructure-group' }];
     });
     return [...groups, ...visible.filter(item => !collapsedIds.has(item.id)).map(item => ({ id: item.id, type: 'object', position: position(item.id),
-      data: { item, incidents: impact.byObject[item.id], affectedCount: impact.counts[item.id], resource: prefs.filters.resource, highlighted: highlighted.has(item.id), influence: influenceKind(item.id), onHover: setHoveredObject, index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
+      data: { item, ports: ports[item.id] ?? [], incidents: impact.byObject[item.id], affectedCount: impact.counts[item.id], resource: prefs.filters.resource, highlighted: highlighted.has(item.id), influence: influenceKind(item.id), onHover: setHoveredObject, index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
       width: NODE_WIDTH, height: NODE_HEIGHT, draggable: editing, selectable: false,
       className: highlighted.has(item.id) ? 'graph-selected' : '',
     })), ...prefs.annotations.map(annotation => {
@@ -149,7 +151,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
         width: bounds.width, height: bounds.height, style: { width: bounds.width, height: bounds.height, pointerEvents: 'none' as const },
         draggable: false, selectable: false, className: 'annotation-proxy' };
     })].map(node => ({ ...node, measured: measurements[node.id] }));
-  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup, influenceKind, impact]);
+  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup, influenceKind, impact, ports]);
   const edges = useMemo<MapEdge[]>(() => projectedDependencies(data.dependencies, prefs.groups, visibleIds).filter(edge =>
     !prefs.filters.resource || edge.resource === prefs.filters.resource).map((edge, _index, shown) => {
     const peers = shown.filter(other => other.source === edge.source && other.target === edge.target);
@@ -158,7 +160,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
     const offset = parallel ? (peers.findIndex(other => other.id === edge.id) - (peers.length - 1) / 2) * 36 : 0;
     const points = edge.projected ? (parallel ? [{ x: (source.position.x + NODE_WIDTH + target.position.x) / 2, y: (source.position.y + target.position.y + NODE_HEIGHT) / 2 + offset }] : []) : prefs.routes[edge.id] ?? [];
     const original = data.dependencies.find(other => other.id === edge.id)!;
-    return { id: edge.id, source: edge.source, target: edge.target, sourceHandle: 'out', targetHandle: 'in', type: 'routed',
+    return { id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.source === original.source ? handleId(edge.id, 'out') : 'out', targetHandle: edge.target === original.target ? handleId(edge.id, 'in') : 'in', type: 'routed',
       selected: selectedEdge === edge.id, reconnectable: false,
       markerEnd: { type: MarkerType.ArrowClosed, width: 24, height: 24, color: edge.resource === 'water' ? '#0284c7' : '#b77908' },
       style: { stroke: edge.resource === 'water' ? '#0284c7' : '#b77908',
@@ -220,7 +222,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
     const edge = data.dependencies.find(edge => edge.id === edgeId)!;
     const start = position(edge.source), end = position(edge.target);
     const points = prefs.routes[edgeId] ?? [];
-    const path = [{ x: start.x + NODE_WIDTH, y: start.y + NODE_HEIGHT / 2 }, ...points, { x: end.x, y: end.y + NODE_HEIGHT / 2 }];
+    const path = [{ x: start.x + NODE_WIDTH, y: start.y + (ports[edge.source]?.find(port => port.id === handleId(edge.id, 'out'))?.y ?? NODE_HEIGHT / 2) }, ...points, { x: end.x, y: end.y + (ports[edge.target]?.find(port => port.id === handleId(edge.id, 'in'))?.y ?? NODE_HEIGHT / 2) }];
     let best = 0, distance = Infinity;
     for (let i = 0; i < path.length - 1; i++) {
       const a = path[i], b = path[i + 1], dx = b.x - a.x, dy = b.y - a.y;
@@ -333,7 +335,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historica
         <DispatcherLayer annotations={prefs.annotations} active={mode === 'dispatcher'} tool={drawingTool} color={drawingColor} width={drawingWidth} eraserSize={eraserSize} text={noteText}
           selected={selectedAnnotation} onSelect={id => { setSelectedAnnotation(id); const note = prefs.annotations.find(a => a.id === id); if (note?.kind === 'text') setNoteText(note.text); }}
           onChange={annotations => dispatch(graphActions.edit({ annotations }))} />
-        <Background gap={24} color="#bdc9d9" /><MiniMap ariaLabel="Мини-карта объектов" pannable zoomable nodeColor={node => {
+        <Background gap={24} color="var(--map-grid)" /><MiniMap ariaLabel="Мини-карта объектов" pannable zoomable nodeColor={node => {
           const item = data.objects.find(item => item.id === node.id);
           return node.type === 'annotation' ? '#b49ad8' : item && item.resources.some(r => (!prefs.filters.resource || r === prefs.filters.resource) && impact.byObject[item.id]?.[r] && !impact.byObject[item.id]?.[r]?.own) && objectState(item, prefs.filters.resource) !== 'incident' ? '#ea580c' : item ? ({ normal: '#159777', maintenance: '#d99116', incident: '#db4555', unknown: '#94a3b8' })[objectState(item, prefs.filters.resource)] : '#cbd5e1';
         }} /><Controls showInteractive={false} showZoom={false} showFitView={false} aria-label="Масштаб карты">

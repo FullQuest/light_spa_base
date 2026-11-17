@@ -1,20 +1,25 @@
-import { memo, useState } from 'react';
-import { BaseEdge, EdgeLabelRenderer, Handle, Position, useReactFlow } from '@xyflow/react';
+import { memo, useEffect, useState } from 'react';
+import { BaseEdge, EdgeLabelRenderer, Handle, Position, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
 import type { ResourceIncident } from './incidents';
 import { IncidentDuration } from './IncidentClock';
+import type { ConnectionPort } from './layoutModel';
 import { roundedPath } from './routes';
 import { objectState, resourceNames, stateIcons, stateNames } from './types';
-export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; influence?: 'active' | 'hover' | null; index: number; dependentCount: number; districtName?: string; incidents?: Partial<Record<Resource, ResourceIncident>>; affectedCount?: number; onHover?: (id: string | null) => void };
+export type ObjectNodeData = { item: InfrastructureObject; ports: ConnectionPort[]; resource: Resource | ''; highlighted: boolean; influence?: 'active' | 'hover' | null; index: number; dependentCount: number; districtName?: string; incidents?: Partial<Record<Resource, ResourceIncident>>; affectedCount?: number; onHover?: (id: string | null) => void };
 export type MapNode = Node<ObjectNodeData, 'object'>;
 export const ObjectNode = memo(function ObjectNode({ id, data }: NodeProps<MapNode>) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const portKey = data.ports.map(port => `${port.id}:${port.y}`).join('|');
+  useEffect(() => { updateNodeInternals(id); }, [id, portKey, updateNodeInternals]);
   const state = objectState(data.item, data.resource);
   const relevantImpact = data.item.resources.filter(r => !data.resource || data.resource === r).some(r => data.incidents?.[r]);
   const ownIncident = data.item.resources.filter(r => !data.resource || data.resource === r).some(r => data.incidents?.[r]?.own);
   return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''} ${data.influence ? `influence-${data.influence}` : ''} ${Object.values(data.incidents ?? {}).some(entry => entry.own) ? 'incident-source' : Object.keys(data.incidents ?? {}).length ? 'incident-affected' : ''}`}
     onMouseEnter={() => data.onHover?.(id)} onMouseLeave={() => data.onHover?.(null)}>
-    <Handle type="target" position={Position.Left} id="in" isConnectable={false} />
+    {data.ports.map(port => <Handle key={port.id} type={port.side === 'in' ? 'target' : 'source'}
+      position={port.side === 'in' ? Position.Left : Position.Right} id={port.id} style={{ top: port.y }} isConnectable={false} />)}
     <div className="object-meta"><span>{data.item.kind === 'station' ? '◈ Станция' : '▦ Потребитель'}</span><span>{data.districtName ?? 'Без района'}</span></div>
     <strong>{data.item.name}</strong>
     <div className="resource-statuses">{data.item.resources.map(r => {
@@ -29,7 +34,6 @@ export const ObjectNode = memo(function ObjectNode({ id, data }: NodeProps<MapNo
     })}</div>
     {Object.values(data.incidents ?? {}).some(entry => entry.own) && <div className="incident-tooltip" role="tooltip">Под влиянием аварии: {data.affectedCount ?? 0} {dependentNoun(data.affectedCount ?? 0)} (прямые и косвенные).</div>}
     <div className="object-bottom"><span className={`object-state ${ownIncident ? 'incident' : relevantImpact ? 'affected' : state}`}>{ownIncident ? '! Авария' : relevantImpact ? '↳ Под влиянием' : `${stateIcons[state]} ${stateNames[state]}`}</span><span className="dependency-index" title={`Зависимых объектов: ${data.dependentCount}`} aria-label={`Индекс ${data.index}, зависимых ${data.dependentCount}`}>Индекс {data.index}</span></div>
-    <Handle type="source" position={Position.Right} id="out" isConnectable={false} />
   </div>;
 });
 function dependentNoun(count: number) {
