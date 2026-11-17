@@ -1,9 +1,18 @@
 import { configureStore, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { Preferences } from './types';
+import { assignGroup } from './types.ts';
 export function defaultPreferences(): Preferences {
   return { positions: {}, routes: {}, groups: [], annotations: [], hidden: [],
     filters: { resource: '', state: '', district: '', incidentsOnly: false } };
+}
+// Совместимость с оформлением до появления пользовательских районов:
+// адресный фильтр сбрасываем, пересекающиеся группы приводим к одному району на объект.
+export function restorePreferences(saved?: Partial<Preferences>): Preferences {
+  const prefs = { ...defaultPreferences(), ...saved, filters: { ...defaultPreferences().filters, ...saved?.filters } };
+  prefs.groups = prefs.groups.reduce((groups, group) => assignGroup(groups, group), [] as Preferences['groups']);
+  if (prefs.filters.district && !prefs.groups.some(group => group.id === prefs.filters.district)) prefs.filters.district = '';
+  return prefs;
 }
 const slice = createSlice({
   name: 'graph', initialState: { present: defaultPreferences(), past: [] as Preferences[], future: [] as Preferences[] },
@@ -42,7 +51,7 @@ export async function loadPreferences(key: string): Promise<Preferences> {
   try {
     return await new Promise((resolve, reject) => {
       const request = db.transaction('preferences').objectStore('preferences').get(key);
-      request.onsuccess = () => resolve({ ...defaultPreferences(), ...request.result });
+      request.onsuccess = () => resolve(restorePreferences(request.result));
       request.onerror = () => reject(request.error);
     });
   } finally { db.close(); }

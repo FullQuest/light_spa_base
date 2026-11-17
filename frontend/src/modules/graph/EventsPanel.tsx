@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { CurrentEvent, LiveGraph } from './snapshot';
 import type { Resource } from './types';
 import { resourceNames, stateIcons, stateNames } from './types';
-export function EventsPanel({ data, focused, resource, visibleIds, onSelect }: {
-  data: LiveGraph; focused: string | null; resource: Resource | null; visibleIds: Set<string>;
+export function EventsPanel({ data, focused, resource, visibleIds, districtNames, onSelect }: {
+  data: LiveGraph; focused: string | null; resource: Resource | null; visibleIds: Set<string>; districtNames: Map<string, string>;
   onSelect: (event: CurrentEvent) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
@@ -26,7 +26,7 @@ export function EventsPanel({ data, focused, resource, visibleIds, onSelect }: {
         return <button key={event.id} data-event-id={event.id} data-object-id={event.objectId} data-resource={event.resource}
           className={`graph-event ${selected ? 'selected' : ''}`} aria-pressed={selected} onClick={() => onSelect(event)}>
           <span className={`object-state ${event.status}`}>{stateIcons[event.status]} {stateNames[event.status]}</span>
-          <strong>{object.name}</strong><span>{resourceNames[event.resource]} · {object.district}</span>
+          <strong>{object.name}</strong><span>{resourceNames[event.resource]} · {districtNames.get(object.id) ?? 'Без района'}</span>
           <time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString('ru-RU')}</time>
           <small>{event.statusName}</small>{event.description && <small>{event.description}</small>}
           {!visibleIds.has(object.id) && <small>Объект скрыт · нажмите, чтобы показать</small>}

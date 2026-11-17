@@ -58,11 +58,12 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
               const offset = Math.max(0, ...Object.values(positions).map(p => p.x)) + NODE_WIDTH + 160;
               for (const item of data.objects) if (!positions[item.id]) positions[item.id] = { x: layout.positions[item.id].x + offset, y: layout.positions[item.id].y };
             }
+            const groups = prefs.groups.map(group => ({ ...group, members: group.members.filter(id => ids.has(id)) })).filter(group => group.members.length);
             const patch: Partial<Preferences> = { positions,
               routes: Object.fromEntries(Object.entries(prefs.routes).filter(([id]) => edges.has(id))),
               manualRouteIds: prefs.manualRouteIds?.filter(id => edges.has(id)),
               hidden: prefs.hidden.filter(id => ids.has(id)),
-              groups: prefs.groups.map(group => ({ ...group, members: group.members.filter(id => ids.has(id)) })).filter(group => group.members.length) };
+              groups, filters: { ...prefs.filters, district: groups.some(group => group.id === prefs.filters.district) ? prefs.filters.district : '' } };
             current.store.dispatch(graphActions.reconcile(patch));
           }
           current = { ...current, data };

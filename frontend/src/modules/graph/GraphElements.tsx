@@ -1,19 +1,19 @@
 import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, Handle, Position, useReactFlow } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
-import type { Annotation, InfrastructureObject, Point, Resource } from './types';
+import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
 import { roundedPath } from './routes';
 import { objectState, resourceNames, stateIcons, stateNames } from './types';
-export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean };
+export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; index: number; dependentCount: number; districtName?: string };
 export type MapNode = Node<ObjectNodeData, 'object'>;
 export const ObjectNode = memo(function ObjectNode({ data }: NodeProps<MapNode>) {
   const state = objectState(data.item, data.resource);
   return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''}`}>
     <Handle type="target" position={Position.Left} id="in" isConnectable={false} />
-    <div className="object-meta"><span>{data.item.kind === 'station' ? '◈ Станция' : '▦ Потребитель'}</span><span>{data.item.district}</span></div>
+    <div className="object-meta"><span>{data.item.kind === 'station' ? '◈ Станция' : '▦ Потребитель'}</span><span>{data.districtName ?? 'Без района'}</span></div>
     <strong>{data.item.name}</strong>
-    <small>{data.item.resources.map(r => resourceNames[r]).join(' · ')}</small>
-    <span className={`object-state ${state}`}>{stateIcons[state]} {stateNames[state]}</span>
+    <div className="resource-badges">{data.item.resources.map(r => <span className={`resource-badge ${r}`} key={r}>{r === 'water' ? '●' : 'ϟ'} {resourceNames[r]}</span>)}</div>
+    <div className="object-bottom"><span className={`object-state ${state}`}>{stateIcons[state]} {stateNames[state]}</span><span className="dependency-index" title={`Зависимых объектов: ${data.dependentCount}`} aria-label={`Индекс ${data.index}, зависимых ${data.dependentCount}`}>Индекс {data.index}</span></div>
     <Handle type="source" position={Position.Right} id="out" isConnectable={false} />
   </div>;
 });
@@ -28,7 +28,11 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
   const all = [{ x: sourceX, y: sourceY }, ...shown, { x: targetX, y: targetY }];
   const path = data?.routeStyle === 'rounded' ? roundedPath(all) : all.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
   return <>
-    <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 3 : 1.8 }} />
+    <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 3 : 2.2 }} />
+    <path className="resource-flow" opacity={style?.opacity} d={path} fill="none" stroke={style?.stroke ?? '#0284c7'} strokeWidth="3" strokeDasharray="3 22" pointerEvents="none" />
+    <EdgeLabelRenderer><span className={`edge-resource-label ${data?.resource}`} style={{ transform: `translate(-50%, -50%) translate(${all[Math.floor((all.length - 1) / 2)].x + (all[Math.ceil((all.length - 1) / 2)].x - all[Math.floor((all.length - 1) / 2)].x) / 2}px,${all[Math.floor((all.length - 1) / 2)].y + (all[Math.ceil((all.length - 1) / 2)].y - all[Math.floor((all.length - 1) / 2)].y) / 2}px)`, opacity: style?.opacity }}>
+      {data?.resource && resourceNames[data.resource]} →
+    </span></EdgeLabelRenderer>
     {data?.editing && selected && <EdgeLabelRenderer>
       {shown.map((point, index) => <button key={index} className="route-handle nodrag nopan" aria-label={`Точка маршрута ${index + 1}`}
         title="Перетащите точку. Двойной щелчок — удалить."
@@ -44,23 +48,16 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
     </EdgeLabelRenderer>}
   </>;
 }
-export type AnnotationData = { annotation: Annotation; editing: boolean; updateEnd: (id: string, point: Point) => void };
-export function AnnotationNode({ data }: NodeProps<Node<AnnotationData>>) {
-  const { annotation, editing, updateEnd } = data;
-  const { screenToFlowPosition } = useReactFlow();
-  const [end, setEnd] = useState<Point | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const delta = end ?? annotation.end ?? { x: 180, y: 0 };
-  if (annotation.kind === 'text') return <div className="map-note">{annotation.text}</div>;
-  return <div className="map-line" style={{ width: Math.max(24, Math.abs(delta.x)), height: Math.max(24, Math.abs(delta.y)) }}>
-    <svg style={{ overflow: 'visible' }} width="1" height="1"><line x1="0" y1="0" x2={delta.x} y2={delta.y} stroke="currentColor" strokeWidth="3" /></svg>
-    {editing && <><span className="line-origin" title="Переместить линию">●</span><button className="line-end nodrag nopan" aria-label="Конец линии"
-      style={{ left: delta.x, top: delta.y }} onPointerDown={e => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setDragging(true); }}
-      onPointerMove={e => { if (dragging) { const p = screenToFlowPosition({ x: e.clientX, y: e.clientY }); setEnd({ x: p.x - annotation.position.x, y: p.y - annotation.position.y }); } }}
-      onPointerUp={e => { const p = screenToFlowPosition({ x: e.clientX, y: e.clientY }); updateEnd(annotation.id, { x: p.x - annotation.position.x, y: p.y - annotation.position.y }); setDragging(false); setEnd(null); }}
-      onPointerCancel={() => { setDragging(false); setEnd(null); }} /></>}
+// Пометки рисуются отдельным SVG-слоем. Узлы-прокси нужны только мини-карте.
+export function AnnotationProxy() { return null; }
+// Точки подключения существуют и у развёрнутого района: React Flow должен
+// зарегистрировать их до одновременного переключения узлов и проекции рёбер.
+export function GroupNode({ data }: NodeProps<Node<{ label: string; collapsed: boolean; highlighted: boolean; resources: Resource[]; state: ObjectState; toggle: () => void }>>) {
+  return <div className={data.collapsed ? `collapsed-district ${data.highlighted ? 'highlighted' : ''}` : 'map-group-label'}>
+    <Handle type="target" position={Position.Left} id="in" isConnectable={false} style={{ opacity: data.collapsed ? 1 : 0 }} />
+    <div className="district-heading"><strong>{data.label}</strong>
+    <button className="nodrag nopan" aria-label={`${data.collapsed ? 'Развернуть' : 'Свернуть'} район ${data.label}`} onClick={e => { e.stopPropagation(); data.toggle(); }}>{data.collapsed ? 'Развернуть' : 'Свернуть'}</button></div>
+    {data.collapsed && <><div className="resource-badges">{data.resources.map(resource => <span key={resource} className={`resource-badge ${resource}`}>{resourceNames[resource]}</span>)}</div><span className={`object-state ${data.state}`}>{stateIcons[data.state]} {stateNames[data.state]}</span></>}
+    <Handle type="source" position={Position.Right} id="out" isConnectable={false} style={{ opacity: data.collapsed ? 1 : 0 }} />
   </div>;
-}
-export function GroupNode({ data }: NodeProps<Node<{ label: string }>>) {
-  return <div className="map-group-label">{data.label}</div>;
 }

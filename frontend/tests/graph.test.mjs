@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { descendants, objectState, visibleObjects } from '../src/modules/graph/types.ts';
-import { createGraphStore, defaultPreferences, graphActions } from '../src/modules/graph/store.ts';
+import { createGraphStore, defaultPreferences, graphActions, restorePreferences } from '../src/modules/graph/store.ts';
 const objects = [
   { id: 'a', resources: ['water','energy'], states: { water: 'normal', energy: 'incident' }, district: 'A' },
   { id: 'b', resources: ['water'], states: { water: 'maintenance' }, district: 'B' },
@@ -24,7 +24,8 @@ test('per-resource state and incident filters do not mix resources', () => {
 });
 test('filters intersect with manual hiding and district', () => {
   const prefs = defaultPreferences();
-  prefs.filters.district = 'A';
+  prefs.groups = [{ id: 'user-district', name: 'Мой район', members: ['a', 'c'] }];
+  prefs.filters.district = 'user-district';
   prefs.hidden = ['c'];
   assert.deepEqual(visibleObjects({ objects }, prefs).map(o => o.id), ['a']);
   prefs.filters.state = 'normal';
@@ -112,4 +113,54 @@ test('cyclic or timezone-ambiguous snapshots cannot replace the map', () => {
   const raw = snapshot();
   assert.throws(() => normalizeSnapshot({ ...raw, dependencies: [...raw.dependencies, { id: 'ba', source: 'b', target: 'a', resource: 'water' }] }), /циклический/);
   assert.throws(() => normalizeSnapshot({ ...raw, currentEvents: [{ ...raw.currentEvents[0], occurredAt: '2026-11-17T12:00:00' }] }));
+});
+
+import { dependencyIndices, assignGroup, projectedDependencies } from '../src/modules/graph/types.ts';
+import { annotationBounds, annotationHit, eraseAnnotations } from '../src/modules/graph/drawing.ts';
+test('indices count unique transitive dependents across resources, independent of presentation', () => {
+  const data = { objects: ['a','b','c','d','e'].map(id => ({ id })), dependencies: [
+    { source: 'a', target: 'b' }, { source: 'a', target: 'c' }, { source: 'b', target: 'd' }, { source: 'c', target: 'd' }, { source: 'a', target: 'b' } ] };
+  assert.deepEqual(dependencyIndices(data), { a: { count: 3, index: 10 }, b: { count: 1, index: 3 }, c: { count: 1, index: 3 }, d: { count: 0, index: 0 }, e: { count: 0, index: 0 } });
+  assert.equal(dependencyIndices({ objects: [{ id: 'leaf' }], dependencies: [] }).leaf.index, 0);
+  const many = { objects: Array.from({ length: 102 }, (_, i) => ({ id: String(i) })), dependencies: Array.from({ length: 101 }, (_, i) => ({ source: String(i), target: String(i + 1) })) };
+  assert.equal(dependencyIndices(many)['1'].index, 9);
+  assert.equal(dependencyIndices(many)['100'].index, 1);
+});
+test('district membership is exclusive and independent of addresses', () => {
+  const groups = [{ id: 'g1', name: 'Первый', members: ['a', 'b'] }, { id: 'g2', name: 'Второй', members: ['c'] }];
+  const result = assignGroup(groups, { id: 'g3', name: 'Новый', members: ['b', 'c'] });
+  assert.deepEqual(result.map(g => g.members), [['a'], ['b', 'c']]);
+  assert.deepEqual(groups[0].members, ['a', 'b']);
+  const prefs = defaultPreferences(); prefs.groups = result; prefs.filters.district = 'g3';
+  assert.deepEqual(visibleObjects({ objects }, prefs).map(o => o.id), ['b', 'c']);
+});
+test('collapsed districts project boundaries without changing logical edges or losing resources', () => {
+  const dependencies = [{ id: 'ab', source: 'a', target: 'b', resource: 'water' }, { id: 'bc', source: 'b', target: 'c', resource: 'water' }, { id: 'ac', source: 'a', target: 'c', resource: 'energy' }, { id: 'cd', source: 'c', target: 'd', resource: 'water' }];
+  const groups = [{ id: 'g', members: ['a', 'b'], collapsed: true }, { id: 'h', members: ['c'], collapsed: true }];
+  const original = structuredClone(dependencies);
+  const projected = projectedDependencies(dependencies, groups, new Set(['a','b','c','d']));
+  assert.deepEqual(projected.map(e => [e.id, e.source, e.target, e.resource]), [['bc','g','h','water'], ['ac','g','h','energy'], ['cd','h','d','water']]);
+  assert.deepEqual(dependencies, original);
+  assert.deepEqual([...descendants('a', dependencies)], ['a','b','c','d']);
+  assert.deepEqual(projectedDependencies(dependencies, [], new Set(['a','b'])).map(e => e.id), ['ab']);
+});
+test('partial eraser leaves masked strokes, whole eraser removes only hit annotations', () => {
+  const annotations = [{ id: 'line', kind: 'line', text: '', position: { x: 100, y: 200 }, end: { x: 200, y: 0 }, width: 4 }, { id: 'far', kind: 'rectangle', text: '', position: { x: 500, y: 500 }, end: { x: -100, y: -100 } }];
+  const partial = eraseAnnotations(annotations, { x: 140, y: 200 }, { x: 260, y: 200 }, 10, false);
+  assert.equal(partial.length, 2); assert.ok(partial[0].erasures.length > 10);
+  assert.equal(annotationHit(partial[0], { x: 200, y: 200 }, 0), false);
+  assert.equal(annotationHit(partial[0], { x: 110, y: 200 }, 0), true);
+  assert.equal(annotations[0].erasures, undefined);
+  assert.deepEqual(eraseAnnotations(annotations, { x: 200, y: 150 }, { x: 200, y: 250 }, 10, true).map(a => a.id), ['far']);
+  assert.deepEqual(annotationBounds(annotations[1]), { x: 400, y: 400, width: 100, height: 100 });
+});
+
+test('old address filters and overlapping groups migrate without hiding the whole graph', () => {
+  const old = { groups: [{ id: 'old', name: 'Старый', members: ['a','b'] }, { id: 'new', name: 'Новый', members: ['b','c'], collapsed: true }], filters: { district: 'Адресный район' } };
+  const prefs = restorePreferences(old);
+  assert.equal(prefs.filters.district, '');
+  assert.deepEqual(prefs.groups.map(g => g.members), [['a'],['b','c']]);
+  assert.equal(prefs.groups[1].collapsed, true);
+  assert.equal(prefs.filters.incidentsOnly, false);
+  assert.equal(old.filters.district, 'Адресный район');
 });

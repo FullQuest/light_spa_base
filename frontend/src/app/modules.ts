@@ -27,7 +27,7 @@ export const features = { profile: true, users: true, roles: true, documents: tr
 
 export const modules: AppModule[] = [
   { path: '/', title: 'Главная', Page: HomePage },
-  { path: '/graph', title: 'Граф объектов', Page: GraphPage },
+  { path: '/graph', title: 'Схема', Page: GraphPage },
   // { path: '/profile', title: 'Профиль', Page: ProfilePage, enabled: features.profile },
   // { path: '/users', title: 'Пользователи', Page: UsersPage, permission: 'users.manage', enabled: features.users },
   // { path: '/roles', title: 'Роли', Page: RolesPage, superadminOnly: true, enabled: features.roles },

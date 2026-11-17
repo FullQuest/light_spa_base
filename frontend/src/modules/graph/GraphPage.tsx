@@ -5,19 +5,22 @@ import type { Node, NodeChangeset, NodeMouseHandler, OnNodeDrag } from '@xyflow/
 import { useAuth } from '../../auth/auth';
 import { defaultPreferences, graphActions } from './store';
 import type { GraphState, GraphStore } from './store';
-import { descendants, newMapId, objectState, resourceNames, stateNames, visibleObjects } from './types';
-import type { Annotation, InfrastructureObject, ObjectState, Point, Resource } from './types';
+import { assignGroup, dependencyIndices, projectedDependencies, descendants, newMapId, objectState, resourceNames, stateNames, visibleObjects } from './types';
+import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
 import { useLiveGraph } from './useLiveGraph';
 import type { CurrentEvent, LiveGraph } from './snapshot';
 import { moveRoutes } from './routes';
 import { EventsPanel } from './EventsPanel';
 import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from './layout';
-import { ObjectNode, AnnotationNode, GroupNode, RoutedEdge } from './GraphElements';
+import { ObjectNode, AnnotationProxy, GroupNode, RoutedEdge } from './GraphElements';
 import type { MapEdge } from './GraphElements';
 import '@xyflow/react/dist/style.css';
 import './graph.css';
+import { DispatcherLayer } from './DispatcherLayer';
+import { annotationBounds } from './drawing';
+import type { DrawingTool } from './drawing';
 
-const nodeTypes = { object: ObjectNode, annotation: AnnotationNode, group: GroupNode };
+const nodeTypes = { object: ObjectNode, annotation: AnnotationProxy, group: GroupNode };
 const edgeTypes = { routed: RoutedEdge };
 
 export function GraphPage() {
@@ -25,8 +28,8 @@ export function GraphPage() {
   const userId = user?.id;
   const [attempt, setAttempt] = useState(0);
   const { loaded, error, refreshError, storageWarning, receivedAt } = useLiveGraph(userId, attempt);
-  if (error) return <section><h1>Граф объектов</h1><p role="alert">{error}</p><button onClick={() => setAttempt(a => a + 1)}>Повторить</button></section>;
-  if (!loaded) return <section><h1>Граф объектов</h1><p role="status">Загрузка объектов и расчёт схемы…</p></section>;
+  if (error) return <section><p role="alert">{error}</p><button onClick={() => setAttempt(a => a + 1)}>Повторить</button></section>;
+  if (!loaded) return <section><p role="status">Загрузка объектов и расчёт схемы…</p></section>;
   return <Provider store={loaded.store}><ReactFlowProvider><GraphCanvas data={loaded.data} storageWarning={storageWarning} refreshError={refreshError} receivedAt={receivedAt} /></ReactFlowProvider></Provider>;
 }
 
@@ -49,7 +52,12 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       return changed ? next : previous;
     });
   }, []);
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<'view' | 'graph' | 'dispatcher'>('view');
+  const editing = mode === 'graph';
+  const [drawingTool, setDrawingTool] = useState<DrawingTool>('select');
+  const [drawingColor, setDrawingColor] = useState('#875dc7');
+  const [drawingWidth, setDrawingWidth] = useState(4);
+  const [eraserSize, setEraserSize] = useState(24);
   const [manualSelected, setSelected] = useState<string[]>([]);
   const [focused, setFocused] = useState<string | null>(null);
   const [eventResource, setEventResource] = useState<Resource | null>(null);
@@ -61,20 +69,19 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const [query, setQuery] = useState('');
   const [groupName, setGroupName] = useState('');
   const [noteText, setNoteText] = useState('');
-  const [placement, setPlacement] = useState<'text' | 'line' | null>(null);
   const [layoutBusy, setLayoutBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [selectionFilter, setSelectionFilter] = useState<'all' | 'water' | 'energy'>('all');
   // Обновление топологии пересчитывает выделение, не сбрасывая выбор пользователя.
   const selected = useMemo(() => {
     const object = data.objects.find(item => item.id === focused);
-    if (object && selectionMode.startsWith('Район:')) return data.objects.filter(item => item.district === object.district).map(item => item.id);
+    if (object && selectionMode.startsWith('Район:')) return prefs.groups.find(group => group.members.includes(object.id))?.members ?? [object.id];
     if (object && (selectionMode === 'Объект и все зависимые' || selectionMode.startsWith('Событие:'))) {
       const resource = eventResource ?? (selectionFilter === 'all' ? null : selectionFilter);
       return [...descendants(object.id, resource ? data.dependencies.filter(edge => edge.resource === resource) : data.dependencies)];
     }
     return manualSelected.filter(id => data.objects.some(item => item.id === id));
-  }, [data, focused, manualSelected, selectionMode, eventResource, selectionFilter]);
+  }, [data, prefs.groups, focused, manualSelected, selectionMode, eventResource, selectionFilter]);
   const visible = useMemo(() => visibleObjects(data, prefs), [data, prefs]);
   const visibleIds = useMemo(() => new Set(visible.map(item => item.id)), [visible]);
   const highlighted = useMemo(() => new Set(selected), [selected]);
@@ -82,48 +89,65 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const routeUpdate = useCallback((id: string, points: Point[]) => {
     dispatch(graphActions.edit({ routes: { ...prefs.routes, [id]: points }, manualRouteIds: [...new Set([...(prefs.manualRouteIds ?? []), id])] }));
   }, [dispatch, prefs.routes, prefs.manualRouteIds]);
-  const endUpdate = useCallback((id: string, end: Point) => {
-    dispatch(graphActions.edit({ annotations: prefs.annotations.map(a => a.id === id ? { ...a, end } : a) }));
-  }, [dispatch, prefs.annotations]);
+  const indices = useMemo(() => dependencyIndices(data), [data]);
+  const districtFor = useMemo(() => new Map(prefs.groups.flatMap(group => group.members.map(id => [id, group] as const))), [prefs.groups]);
+  const collapsedIds = useMemo(() => new Set(prefs.groups.filter(group => group.collapsed).flatMap(group => group.members)), [prefs.groups]);
+  const toggleGroup = useCallback((id: string) => dispatch(graphActions.edit({ groups: prefs.groups.map(group => group.id === id ? { ...group, collapsed: !group.collapsed } : group) })), [dispatch, prefs.groups]);
   const nodes = useMemo<Node[]>(() => {
     const groups: Node[] = prefs.groups.flatMap(group => {
       const members = group.members.filter(id => visibleIds.has(id));
       if (!members.length) return [];
       const points = members.map(position);
+      const objects = visible.filter(item => members.includes(item.id));
+      const resources = [...new Set(objects.flatMap(item => item.resources))];
+      const states = objects.map(item => objectState(item, prefs.filters.resource));
+      const state = states.includes('incident') ? 'incident' : states.includes('maintenance') ? 'maintenance' : states.includes('unknown') ? 'unknown' : 'normal';
       const x = Math.min(...points.map(p => p.x)) - 24, y = Math.min(...points.map(p => p.y)) - 40;
-      return [{ id: group.id, type: 'group', position: { x, y }, data: { label: `${group.name} · ${members.length}` },
-        style: { width: Math.max(...points.map(p => p.x)) + NODE_WIDTH + 24 - x,
-          height: Math.max(...points.map(p => p.y)) + NODE_HEIGHT + 24 - y },
-        draggable: editing && !placement, dragHandle: '.map-group-label', selectable: false, zIndex: -1, className: 'infrastructure-group' }];
+      return [{ id: group.id, type: 'group', position: { x, y },
+        data: { label: `${group.name} · ${members.length}`, collapsed: !!group.collapsed, resources, state, highlighted: members.some(id => highlighted.has(id)), toggle: () => toggleGroup(group.id) },
+        style: { width: group.collapsed ? NODE_WIDTH : Math.max(...points.map(p => p.x)) + NODE_WIDTH + 24 - x,
+          height: group.collapsed ? NODE_HEIGHT : Math.max(...points.map(p => p.y)) + NODE_HEIGHT + 24 - y },
+        draggable: editing, dragHandle: group.collapsed ? '.collapsed-district' : '.map-group-label', selectable: false,
+        zIndex: group.collapsed ? 0 : -1, className: group.collapsed ? 'district-proxy' : 'infrastructure-group' }];
     });
-    return [...groups, ...visible.map(item => ({ id: item.id, type: 'object', position: position(item.id),
-      data: { item, resource: prefs.filters.resource, highlighted: highlighted.has(item.id) },
-      width: NODE_WIDTH, height: NODE_HEIGHT, draggable: editing && !placement, selectable: false,
+    return [...groups, ...visible.filter(item => !collapsedIds.has(item.id)).map(item => ({ id: item.id, type: 'object', position: position(item.id),
+      data: { item, resource: prefs.filters.resource, highlighted: highlighted.has(item.id), index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
+      width: NODE_WIDTH, height: NODE_HEIGHT, draggable: editing, selectable: false,
       className: highlighted.has(item.id) ? 'graph-selected' : '',
-    })), ...prefs.annotations.map(annotation => ({ id: annotation.id, type: 'annotation', position: dragPositions[annotation.id] ?? annotation.position,
-      data: { annotation, editing, updateEnd: endUpdate }, draggable: editing && !placement, selectable: false,
-      zIndex: 10, className: selectedAnnotation === annotation.id ? 'annotation-selected' : '',
-    }))].map(node => ({ ...node, measured: measurements[node.id] }));
-  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, placement, endUpdate, selectedAnnotation, dragPositions]);
-  const edges = useMemo<MapEdge[]>(() => data.dependencies.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target) &&
-    (!prefs.filters.resource || edge.resource === prefs.filters.resource)).map(edge => ({
-    id: edge.id, source: edge.source, target: edge.target, sourceHandle: 'out', targetHandle: 'in', type: 'routed',
-    selected: selectedEdge === edge.id, reconnectable: false,
-    markerEnd: { type: MarkerType.ArrowClosed, color: edge.resource === 'water' ? '#0284c7' : '#b77908' },
-    style: { stroke: edge.resource === 'water' ? '#0284c7' : '#b77908',
-      opacity: selected.length && !(highlighted.has(edge.source) && highlighted.has(edge.target)) ? 0.2 : 0.9 },
-    data: { points: prefs.routes[edge.id] ?? [], resource: edge.resource, routeStyle: prefs.routeStyle ?? 'rounded', editing, update: routeUpdate },
-  })), [data, visibleIds, prefs, selectedEdge, selected, highlighted, editing, routeUpdate]);
+    })), ...prefs.annotations.map(annotation => {
+      const bounds = annotationBounds(annotation);
+      return { id: annotation.id, type: 'annotation', position: { x: bounds.x, y: bounds.y }, data: {},
+        width: bounds.width, height: bounds.height, style: { width: bounds.width, height: bounds.height, pointerEvents: 'none' as const },
+        draggable: false, selectable: false, className: 'annotation-proxy' };
+    })].map(node => ({ ...node, measured: measurements[node.id] }));
+  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup]);
+  const edges = useMemo<MapEdge[]>(() => projectedDependencies(data.dependencies, prefs.groups, visibleIds).filter(edge =>
+    !prefs.filters.resource || edge.resource === prefs.filters.resource).map((edge, _index, shown) => {
+    const peers = shown.filter(other => other.source === edge.source && other.target === edge.target);
+    const parallel = peers.length > 1 && edge.projected;
+    const source = nodes.find(node => node.id === edge.source)!, target = nodes.find(node => node.id === edge.target)!;
+    const offset = parallel ? (peers.findIndex(other => other.id === edge.id) - (peers.length - 1) / 2) * 36 : 0;
+    const points = edge.projected ? (parallel ? [{ x: (source.position.x + NODE_WIDTH + target.position.x) / 2, y: (source.position.y + target.position.y + NODE_HEIGHT) / 2 + offset }] : []) : prefs.routes[edge.id] ?? [];
+    const original = data.dependencies.find(other => other.id === edge.id)!;
+    return { id: edge.id, source: edge.source, target: edge.target, sourceHandle: 'out', targetHandle: 'in', type: 'routed',
+      selected: selectedEdge === edge.id, reconnectable: false,
+      markerEnd: { type: MarkerType.ArrowClosed, width: 24, height: 24, color: edge.resource === 'water' ? '#0284c7' : '#b77908' },
+      style: { stroke: edge.resource === 'water' ? '#0284c7' : '#b77908',
+        opacity: selected.length && !(highlighted.has(original.source) && highlighted.has(original.target)) ? 0.2 : 0.9 },
+      data: { points, resource: edge.resource, routeStyle: prefs.routeStyle ?? 'rounded', editing: editing && !edge.projected, update: routeUpdate },
+    };
+  }), [data, visibleIds, prefs, selectedEdge, selected, highlighted, editing, routeUpdate, nodes]);
   const focusedObject = data.objects.find(item => item.id === focused);
   const matches = query.trim() ? data.objects.filter(item => `${item.name} ${item.address}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).slice(0, 20) : [];
   const setFilter = (patch: Partial<typeof prefs.filters>) => dispatch(graphActions.edit({ filters: { ...prefs.filters, ...patch } }));
   const clickNode: NodeMouseHandler = (event, node) => {
-    if (node.type === 'annotation') { setSelectedAnnotation(node.id); setSelectedEdge(null); const a = prefs.annotations.find(a => a.id === node.id); if (a?.kind === 'text') setNoteText(a.text); return; }
+    if (node.type === 'group') { const group = prefs.groups.find(group => group.id === node.id); if (group) { setSelected(group.members); setFocused(null); setSelectionMode('Ручное выделение'); } return; }
     const item = data.objects.find(item => item.id === node.id);
     if (!item) return;
     setFocused(item.id); setEventResource(null); setSelectedEdge(null); setSelectedAnnotation(null);
     if (event.ctrlKey || event.metaKey) {
-      setSelected(data.objects.filter(other => other.district === item.district).map(other => other.id)); setSelectionMode(`Район: ${item.district}`);
+      const group = districtFor.get(item.id);
+      setSelected(group?.members ?? [item.id]); setSelectionMode(`Район: ${group?.name ?? 'Без района'}`);
     } else if (event.shiftKey) {
       setSelected(selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id]); setSelectionMode('Ручное выделение');
     } else {
@@ -144,8 +168,8 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
     finally { setLayoutBusy(false); }
   };
   const focusSearch = (item: InfrastructureObject) => {
-    if (!visibleIds.has(item.id)) {
-      dispatch(graphActions.edit({ hidden: prefs.hidden.filter(id => id !== item.id), filters: defaultPreferences().filters }));
+    if (!visibleIds.has(item.id) || collapsedIds.has(item.id)) {
+      dispatch(graphActions.edit({ hidden: prefs.hidden.filter(id => id !== item.id), filters: defaultPreferences().filters, groups: prefs.groups.map(group => group.members.includes(item.id) ? { ...group, collapsed: false } : group) }));
       setNotice('Фильтры сброшены, найденный объект показан');
     }
     const p = position(item.id);
@@ -157,8 +181,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       const group = prefs.groups.find(group => group.id === node.id);
       if (group) dispatch(graphActions.edit({ positions: { ...prefs.positions, ...dragPositions },
         routes: moveRoutes(prefs.routes, data.dependencies, prefs.positions, dragPositions) }));
-    } else if (node.type === 'annotation') dispatch(graphActions.edit({ annotations: prefs.annotations.map(a => a.id === node.id ? { ...a, position: node.position } : a) }));
-    else dispatch(graphActions.edit({ positions: { ...prefs.positions, [node.id]: node.position },
+    } else dispatch(graphActions.edit({ positions: { ...prefs.positions, [node.id]: node.position },
       routes: moveRoutes(prefs.routes, data.dependencies, prefs.positions, { [node.id]: node.position }) }));
     setDragPositions({});
   };
@@ -179,8 +202,8 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const selectEvent = (event: CurrentEvent) => {
     const item = data.objects.find(item => item.id === event.objectId);
     if (!item) return;
-    if (!visibleIds.has(item.id)) {
-      dispatch(graphActions.edit({ hidden: prefs.hidden.filter(id => id !== item.id), filters: defaultPreferences().filters }));
+    if (!visibleIds.has(item.id) || collapsedIds.has(item.id)) {
+      dispatch(graphActions.edit({ hidden: prefs.hidden.filter(id => id !== item.id), filters: defaultPreferences().filters, groups: prefs.groups.map(group => group.members.includes(item.id) ? { ...group, collapsed: false } : group) }));
       setNotice('Фильтры сброшены, объект выбранного события показан');
     }
     setFocused(item.id); setEventResource(event.resource); setSelectedEdge(null); setSelectedAnnotation(null);
@@ -190,9 +213,11 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
     void flow.setCenter(p.x + NODE_WIDTH / 2, p.y + NODE_HEIGHT / 2, { zoom: 1, duration: 300 });
   };
   return <section className="graph-page">
-    <div className="graph-heading"><div><p className="graph-eyebrow">ИНФРАСТРУКТУРА{data.demo ? ' · ДЕМО' : ''}</p><h1>Граф объектов</h1></div>
+    <div className="graph-heading">
+      <div className="graph-modes" role="group" aria-label="Режим работы">{([['view', 'Просмотр'], ['graph', 'Редактирование графа'], ['dispatcher', 'Инструменты диспетчера']] as const).map(([value, title]) =>
+        <button key={value} aria-pressed={mode === value} className={mode === value ? 'btn-primary' : ''} onClick={() => { setMode(value); setSelectedAnnotation(null); setSelectedEdge(null); }}>{title}</button>)}</div>
       <div className="graph-summary"><strong>{visible.length} / {data.objects.length}</strong><span>объектов · {edges.length} связей</span></div>
-      <button className={editing ? 'btn-primary' : ''} aria-pressed={editing} onClick={() => { setEditing(!editing); setPlacement(null); }}> {editing ? 'Завершить редактирование' : 'Редактировать схему'}</button></div>
+    </div>
     <div className="graph-sync" role="status">
       <span>{data.legacyDemo ? 'Демонстрационные события · подключение БД ещё не выполнено' : data.sourceStatus === 'online' ? 'Источник доступен' : 'Источник недоступен · последний сохранённый снимок'}</span>
       <span>Снимок: {new Date(data.asOf).toLocaleString('ru-RU')} · Синхронизация: {data.syncedAt ? new Date(data.syncedAt).toLocaleString('ru-RU') : 'нет данных'}</span>
@@ -203,7 +228,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
     <div className="graph-toolbar">
       <label>Ресурс<select aria-label="Ресурс" value={prefs.filters.resource} onChange={e => setFilter({ resource: e.target.value as Resource | '' })}><option value="">Все ресурсы</option>{Object.entries(resourceNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
       <label>Состояние<select aria-label="Состояние объекта" value={prefs.filters.state} onChange={e => setFilter({ state: e.target.value as ObjectState | '' })}><option value="">Все состояния</option>{Object.entries(stateNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
-      <label>Район<select aria-label="Район" value={prefs.filters.district} onChange={e => setFilter({ district: e.target.value })}><option value="">Все районы</option>{[...new Set(data.objects.map(item => item.district))].map(d => <option key={d}>{d}</option>)}</select></label>
+      <label>Район<select aria-label="Район" value={prefs.filters.district} onChange={e => setFilter({ district: e.target.value })}><option value="">Все районы</option>{prefs.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
       <label className="graph-check"><input type="checkbox" checked={prefs.filters.incidentsOnly} onChange={e => setFilter({ incidentsOnly: e.target.checked })} />Только с авариями</label>
       <button onClick={() => dispatch(graphActions.edit({ filters: defaultPreferences().filters, hidden: [] }))}>Сбросить фильтры / показать все</button>
       <div className="graph-search"><label>Найти объект<input type="search" aria-label="Найти объект" placeholder="Название или адрес…" value={query} onChange={e => setQuery(e.target.value)} /></label>
@@ -223,29 +248,39 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         <button disabled={layoutBusy} onClick={() => void autoLayout()}>{layoutBusy ? 'Расчёт…' : 'Автораскладка'}</button>
         <label>Вид связей<select aria-label="Вид связей" value={prefs.routeStyle ?? 'rounded'} onChange={e => dispatch(graphActions.edit({ routeStyle: e.target.value as 'rounded' | 'polyline' }))}><option value="rounded">Плавные изгибы</option><option value="polyline">Ломаные линии</option></select></label>
         <label className="graph-check"><input type="checkbox" checked={replaceManualRoutes} onChange={e => setReplaceManualRoutes(e.target.checked)} />Заменить ручные маршруты при автораскладке</label>
-        <button disabled={!selectedEdge} onClick={() => { if (selectedEdge) routeUpdate(selectedEdge, []); }}>Выпрямить выбранную связь</button>
-        <label>Название группы<input value={groupName} maxLength={100} onChange={e => setGroupName(e.target.value)} placeholder="Например, насосный узел" /></label>
+        <button disabled={!selectedEdge || !edges.find(edge => edge.id === selectedEdge)?.data?.editing} onClick={() => { if (selectedEdge) routeUpdate(selectedEdge, []); }}>Выпрямить выбранную связь</button>
+        <label>Название района<input value={groupName} maxLength={100} onChange={e => setGroupName(e.target.value)} placeholder="Например, Северный узел" /></label>
         <button disabled={!selected.length || !groupName.trim()} onClick={() => {
-          dispatch(graphActions.edit({ groups: [...prefs.groups, { id: newMapId('group'), name: groupName.trim(), members: selected }] })); setGroupName('');
-        }}>Сгруппировать выделенное</button>
-        {prefs.groups.map(group => <div className="graph-group-entry" key={group.id}><span>{group.name} ({group.members.length})</span><button aria-label={`Разгруппировать ${group.name}`} onClick={() => dispatch(graphActions.edit({ groups: prefs.groups.filter(g => g.id !== group.id) }))}>×</button></div>)}
+          dispatch(graphActions.edit({ groups: assignGroup(prefs.groups, { id: newMapId('group'), name: groupName.trim(), members: selected }) })); setGroupName('');
+        }}>Создать район из выделенного</button>
+      </div>}
+      <div className="graph-panel"><h2>Районы · {prefs.groups.length}</h2>
+        {!prefs.groups.length && <p>Создавайте районы из выделенных объектов в режиме редактирования графа.</p>}
+        {prefs.groups.map(group => <div className="graph-group-entry" key={group.id}><span>{group.name} ({group.members.length})</span>
+          <button aria-label={`${group.collapsed ? 'Развернуть' : 'Свернуть'} район ${group.name}`} onClick={() => toggleGroup(group.id)}>{group.collapsed ? '▣' : '⊟'}</button>
+          {editing && <button aria-label={`Разгруппировать ${group.name}`} onClick={() => dispatch(graphActions.edit({ groups: prefs.groups.filter(g => g.id !== group.id), filters: { ...prefs.filters, district: prefs.filters.district === group.id ? '' : prefs.filters.district } }))}>×</button>}</div>)}
+      </div>
+      {mode === 'dispatcher' && <div className="graph-panel dispatcher-tools"><h2>Инструменты диспетчера</h2>
+        <p>Пометки полупрозрачны. Выберите инструмент и рисуйте на карте. Инструмент перемещения позволяет сдвигать карту без выхода из режима.</p>
+        <div className="drawing-tools">{([['pan', 'Перемещение карты'], ['select', 'Выбор / перемещение'], ['freehand', 'Произвольная кривая'], ['line', 'Прямая'], ['rectangle', 'Прямоугольник'], ['text', 'Подпись'], ['erase', 'Ластик: целая пометка'], ['erase-part', 'Ластик: часть пометки']] as const).map(([value, title]) =>
+          <button key={value} aria-pressed={drawingTool === value} onClick={() => setDrawingTool(value)}>{title}</button>)}</div>
+        <label>Цвет пометки<input type="color" aria-label="Цвет пометки" value={drawingColor} onChange={e => setDrawingColor(e.target.value)} /></label>
+        <label>Толщина линии: {drawingWidth}<input type="range" aria-label="Толщина линии" min="1" max="20" value={drawingWidth} onChange={e => setDrawingWidth(Number(e.target.value))} /></label>
+        <label>Размер ластика: {eraserSize}<input type="range" aria-label="Размер ластика" min="8" max="100" value={eraserSize} onChange={e => setEraserSize(Number(e.target.value))} /></label>
         <label>Подпись<textarea aria-label="Текст подписи" value={noteText} maxLength={500} onChange={e => setNoteText(e.target.value)} placeholder="Текст пометки" /></label>
-        <button disabled={!noteText.trim()} aria-pressed={placement === 'text'} onClick={() => setPlacement(placement === 'text' ? null : 'text')}>Разместить подпись</button>
-        <button aria-pressed={placement === 'line'} onClick={() => setPlacement(placement === 'line' ? null : 'line')}>Нарисовать линию</button>
-        {placement && <><p role="status">Щёлкните по свободному месту карты. {placement === 'line' ? 'Затем перетащите конец линии.' : ''}</p><button onClick={() => setPlacement(null)}>Отмена размещения</button></>}
-        <button disabled={!selectedAnnotation || !noteText.trim() || prefs.annotations.find(a => a.id === selectedAnnotation)?.kind !== 'text'} onClick={() => dispatch(graphActions.edit({ annotations: prefs.annotations.map(a => a.id === selectedAnnotation ? { ...a, text: noteText.trim() } : a) }))}>Обновить выбранную подпись</button>
+        <button disabled={!selectedAnnotation} onClick={() => dispatch(graphActions.edit({ annotations: prefs.annotations.map(a => a.id === selectedAnnotation ? { ...a, color: drawingColor, width: drawingWidth, ...(a.kind === 'text' ? { text: noteText.trim() || a.text } : {}) } : a) }))}>Применить к выбранной пометке</button>
         <button disabled={!selectedAnnotation} onClick={() => { dispatch(graphActions.edit({ annotations: prefs.annotations.filter(a => a.id !== selectedAnnotation) })); setSelectedAnnotation(null); }}>Удалить пометку</button>
       </div>}
       {focusedObject && <div className="graph-panel object-details"><h2>{focusedObject.name}</h2><p>{focusedObject.address}</p><p>{focusedObject.description}</p>
         {focusedObject.resources.map(resource => <div key={resource}><strong>{resourceNames[resource]}</strong><span className={`object-state ${focusedObject.states[resource]}`}>{stateNames[focusedObject.states[resource] ?? 'unknown']}</span></div>)}
-        <small>ID: {focusedObject.id}</small><small>Прямых зависимых: {data.dependencies.filter(e => e.source === focusedObject.id).length}</small>
+        <small>Индекс: {indices[focusedObject.id].index} / 10 · Всего зависимых: {indices[focusedObject.id].count}</small><small>ID: {focusedObject.id}</small><small>Прямых зависимых: {data.dependencies.filter(e => e.source === focusedObject.id).length}</small>
       </div>}
-    </aside><div className={`graph-canvas ${placement ? 'placing' : ''}`} ref={canvas} data-testid="graph-canvas">
+    </aside><div className="graph-canvas" ref={canvas} data-testid="graph-canvas">
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         defaultViewport={prefs.viewport} fitView={!prefs.viewport} minZoom={0.08} maxZoom={2.5}
-        nodesConnectable={false} edgesReconnectable={false} nodesDraggable={editing && !placement}
+        nodesConnectable={false} edgesReconnectable={false} nodesDraggable={editing}
         deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null} selectionOnDrag={false}
-        panOnDrag={!placement} panOnScroll zoomOnDoubleClick={false}
+        panOnDrag={mode !== 'dispatcher' || drawingTool === 'pan'} panOnScroll zoomOnDoubleClick={false}
         onNodesChange={measureNodes} onNodeClick={clickNode} onNodeDrag={(_e, node) => {
           const group = prefs.groups.find(group => group.id === node.id);
           if (group) {
@@ -259,17 +294,14 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         }} onNodeDragStop={dragStop}
         onMoveEnd={(_e, viewport) => dispatch(graphActions.viewport(viewport))}
         onEdgeClick={(_e, edge) => { setSelectedEdge(edge.id); setSelectedAnnotation(null); }}
-        onEdgeDoubleClick={(event, edge) => { if (editing) { setSelectedEdge(edge.id); addPoint(edge.id, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })); } }}
-        onPaneClick={event => {
-          if (editing && placement) {
-            const annotation: Annotation = { id: newMapId('annotation'), kind: placement, text: noteText.trim(),
-              position: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }), ...(placement === 'line' ? { end: { x: 180, y: 0 } } : {}) };
-            dispatch(graphActions.edit({ annotations: [...prefs.annotations, annotation] })); setPlacement(null); setSelectedAnnotation(annotation.id);
-          } else { setSelectedEdge(null); setSelectedAnnotation(null); }
-        }}>
+        onEdgeDoubleClick={(event, edge) => { if (editing && !collapsedIds.has(data.dependencies.find(e => e.id === edge.id)!.source) && !collapsedIds.has(data.dependencies.find(e => e.id === edge.id)!.target)) { setSelectedEdge(edge.id); addPoint(edge.id, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })); } }}
+        onPaneClick={() => { setSelectedEdge(null); setSelectedAnnotation(null); }}>
+        <DispatcherLayer annotations={prefs.annotations} active={mode === 'dispatcher'} tool={drawingTool} color={drawingColor} width={drawingWidth} eraserSize={eraserSize} text={noteText}
+          selected={selectedAnnotation} onSelect={id => { setSelectedAnnotation(id); const note = prefs.annotations.find(a => a.id === id); if (note?.kind === 'text') setNoteText(note.text); }}
+          onChange={annotations => dispatch(graphActions.edit({ annotations }))} />
         <Background gap={24} color="#bdc9d9" /><MiniMap ariaLabel="Мини-карта объектов" pannable zoomable nodeColor={node => {
           const item = data.objects.find(item => item.id === node.id);
-          return item ? ({ normal: '#159777', maintenance: '#d99116', incident: '#db4555', unknown: '#94a3b8' })[objectState(item, prefs.filters.resource)] : '#cbd5e1';
+          return node.type === 'annotation' ? '#b49ad8' : item ? ({ normal: '#159777', maintenance: '#d99116', incident: '#db4555', unknown: '#94a3b8' })[objectState(item, prefs.filters.resource)] : '#cbd5e1';
         }} /><Controls showInteractive={false} showZoom={false} showFitView={false} aria-label="Масштаб карты">
           <ControlButton title="Приблизить" aria-label="Приблизить" onClick={() => void flow.zoomIn()}>+</ControlButton>
           <ControlButton title="Отдалить" aria-label="Отдалить" onClick={() => void flow.zoomOut()}>−</ControlButton>
@@ -279,7 +311,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       {!visible.length && <div className="graph-empty">Нет объектов по выбранным условиям. Измените фильтры или покажите скрытые объекты.</div>}
       <div className="graph-legend"><span>✓ Норма</span><span>◆ Техработы</span><span>! Авария</span><span>? Нет данных</span><span className="water">━ Вода</span><span className="energy">━ Электроэнергия</span></div>
     </div><EventsPanel data={data} focused={focusedObject?.id ?? null} resource={eventResource}
-      visibleIds={visibleIds} onSelect={selectEvent} /></div>
-    <div className="graph-footer"><span>{editing ? 'Редактирование расположения и пометок' : 'Просмотр · схема защищена от изменений'}</span><span>{notice || 'Настройки сохраняются в этом браузере для вашего аккаунта'}</span><a href="/licenses/graph.txt" target="_blank" rel="noreferrer">Лицензии</a></div>
+      visibleIds={visibleIds} districtNames={new Map([...districtFor].map(([id, group]) => [id, group.name]))} onSelect={selectEvent} /></div>
+    <div className="graph-footer">{notice && <span role="status">{notice}</span>}<a href="/licenses/graph.txt" target="_blank" rel="noreferrer">Лицензии</a></div>
   </section>;
 }
