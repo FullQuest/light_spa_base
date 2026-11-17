@@ -5,7 +5,7 @@ import type { Node, NodeChangeset, NodeMouseHandler, OnNodeDrag } from '@xyflow/
 import { useAuth } from '../../auth/auth';
 import { defaultPreferences, graphActions } from './store';
 import type { GraphState, GraphStore } from './store';
-import { assignGroup, dependencyIndices, projectedDependencies, descendants, newMapId, objectState, resourceNames, stateNames, visibleObjects } from './types';
+import { assignGroup, dependencyIndices, influenceZone, projectedDependencies, descendants, newMapId, objectState, resourceNames, stateNames, visibleObjects } from './types';
 import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
 import { useLiveGraph } from './useLiveGraph';
 import type { CurrentEvent, LiveGraph } from './snapshot';
@@ -60,6 +60,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const [eraserSize, setEraserSize] = useState(24);
   const [manualSelected, setSelected] = useState<string[]>([]);
   const [focused, setFocused] = useState<string | null>(null);
+  const [hoveredObject, setHoveredObject] = useState<string | null>(null);
   const [eventResource, setEventResource] = useState<Resource | null>(null);
   const [replaceManualRoutes, setReplaceManualRoutes] = useState(false);
   const [selectionMode, setSelectionMode] = useState('');
@@ -92,6 +93,16 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const indices = useMemo(() => dependencyIndices(data), [data]);
   const districtFor = useMemo(() => new Map(prefs.groups.flatMap(group => group.members.map(id => [id, group] as const))), [prefs.groups]);
   const collapsedIds = useMemo(() => new Set(prefs.groups.filter(group => group.collapsed).flatMap(group => group.members)), [prefs.groups]);
+  const activeSources = useMemo(() => data.objects.flatMap(item => item.resources.filter(resource => item.states[resource] === 'incident').map(resource => ({ id: item.id, resource }))), [data]);
+  const activeZone = useMemo(() => influenceZone(activeSources, data.dependencies), [activeSources, data.dependencies]);
+  const hoveredSources = useMemo(() => {
+    if (!hoveredObject) return [];
+    const group = prefs.groups.find(item => item.id === hoveredObject);
+    const members = group ? group.members : [hoveredObject];
+    return data.objects.filter(item => members.includes(item.id)).flatMap(item => item.resources.map(resource => ({ id: item.id, resource })));
+  }, [hoveredObject, prefs.groups, data.objects]);
+  const hoveredZone = useMemo(() => influenceZone(hoveredSources, data.dependencies), [hoveredSources, data.dependencies]);
+  const influenceKind = useCallback((id: string) => activeZone.nodes.has(id) ? 'active' as const : hoveredZone.nodes.has(id) ? 'hover' as const : null, [activeZone, hoveredZone]);
   const toggleGroup = useCallback((id: string) => dispatch(graphActions.edit({ groups: prefs.groups.map(group => group.id === id ? { ...group, collapsed: !group.collapsed } : group) })), [dispatch, prefs.groups]);
   const nodes = useMemo<Node[]>(() => {
     const groups: Node[] = prefs.groups.flatMap(group => {
@@ -102,16 +113,20 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       const resources = [...new Set(objects.flatMap(item => item.resources))];
       const states = objects.map(item => objectState(item, prefs.filters.resource));
       const state = states.includes('incident') ? 'incident' : states.includes('maintenance') ? 'maintenance' : states.includes('unknown') ? 'unknown' : 'normal';
+      const resourceStates = Object.fromEntries(resources.map(resource => {
+        const values = objects.filter(item => item.resources.includes(resource)).map(item => item.states[resource] ?? 'unknown');
+        return [resource, values.includes('incident') ? 'incident' : values.includes('maintenance') ? 'maintenance' : values.includes('unknown') ? 'unknown' : 'normal'];
+      })) as Partial<Record<Resource, ObjectState>>;
       const x = Math.min(...points.map(p => p.x)) - 24, y = Math.min(...points.map(p => p.y)) - 40;
       return [{ id: group.id, type: 'group', position: { x, y },
-        data: { label: `${group.name} · ${members.length}`, collapsed: !!group.collapsed, resources, state, highlighted: members.some(id => highlighted.has(id)), toggle: () => toggleGroup(group.id) },
+        data: { label: `${group.name} · ${members.length}`, collapsed: !!group.collapsed, resources, resourceStates, state, highlighted: members.some(id => highlighted.has(id)), influence: members.map(influenceKind).includes('active') ? 'active' as const : members.map(influenceKind).includes('hover') ? 'hover' as const : null, onHover: setHoveredObject, toggle: () => toggleGroup(group.id) },
         style: { width: group.collapsed ? NODE_WIDTH : Math.max(...points.map(p => p.x)) + NODE_WIDTH + 24 - x,
           height: group.collapsed ? NODE_HEIGHT : Math.max(...points.map(p => p.y)) + NODE_HEIGHT + 24 - y },
         draggable: editing, dragHandle: group.collapsed ? '.collapsed-district' : '.map-group-label', selectable: false,
         zIndex: group.collapsed ? 0 : -1, className: group.collapsed ? 'district-proxy' : 'infrastructure-group' }];
     });
     return [...groups, ...visible.filter(item => !collapsedIds.has(item.id)).map(item => ({ id: item.id, type: 'object', position: position(item.id),
-      data: { item, resource: prefs.filters.resource, highlighted: highlighted.has(item.id), index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
+      data: { item, resource: prefs.filters.resource, highlighted: highlighted.has(item.id), influence: influenceKind(item.id), onHover: setHoveredObject, index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
       width: NODE_WIDTH, height: NODE_HEIGHT, draggable: editing, selectable: false,
       className: highlighted.has(item.id) ? 'graph-selected' : '',
     })), ...prefs.annotations.map(annotation => {
@@ -120,7 +135,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         width: bounds.width, height: bounds.height, style: { width: bounds.width, height: bounds.height, pointerEvents: 'none' as const },
         draggable: false, selectable: false, className: 'annotation-proxy' };
     })].map(node => ({ ...node, measured: measurements[node.id] }));
-  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup]);
+  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup, influenceKind]);
   const edges = useMemo<MapEdge[]>(() => projectedDependencies(data.dependencies, prefs.groups, visibleIds).filter(edge =>
     !prefs.filters.resource || edge.resource === prefs.filters.resource).map((edge, _index, shown) => {
     const peers = shown.filter(other => other.source === edge.source && other.target === edge.target);
@@ -134,9 +149,11 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       markerEnd: { type: MarkerType.ArrowClosed, width: 24, height: 24, color: edge.resource === 'water' ? '#0284c7' : '#b77908' },
       style: { stroke: edge.resource === 'water' ? '#0284c7' : '#b77908',
         opacity: selected.length && !(highlighted.has(original.source) && highlighted.has(original.target)) ? 0.2 : 0.9 },
-      data: { points, resource: edge.resource, routeStyle: prefs.routeStyle ?? 'rounded', editing: editing && !edge.projected, update: routeUpdate },
+      data: { points, resource: edge.resource, routeStyle: prefs.routeStyle ?? 'rounded', editing: editing && !edge.projected,
+        influence: activeZone.edges.has(original.id) ? 'active' as const : hoveredZone.edges.has(original.id) ? 'hover' as const : null,
+        update: routeUpdate },
     };
-  }), [data, visibleIds, prefs, selectedEdge, selected, highlighted, editing, routeUpdate, nodes]);
+  }), [data, visibleIds, prefs, selectedEdge, selected, highlighted, editing, routeUpdate, nodes, activeZone, hoveredZone]);
   const focusedObject = data.objects.find(item => item.id === focused);
   const matches = query.trim() ? data.objects.filter(item => `${item.name} ${item.address}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).slice(0, 20) : [];
   const setFilter = (patch: Partial<typeof prefs.filters>) => dispatch(graphActions.edit({ filters: { ...prefs.filters, ...patch } }));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { descendants, objectState, visibleObjects } from '../src/modules/graph/types.ts';
+import { descendants, influenceZone, objectState, visibleObjects } from '../src/modules/graph/types.ts';
 import { createGraphStore, defaultPreferences, graphActions, restorePreferences } from '../src/modules/graph/store.ts';
 const objects = [
   { id: 'a', resources: ['water','energy'], states: { water: 'normal', energy: 'incident' }, district: 'A' },
@@ -163,4 +163,34 @@ test('old address filters and overlapping groups migrate without hiding the whol
   assert.equal(prefs.groups[1].collapsed, true);
   assert.equal(prefs.filters.incidentsOnly, false);
   assert.equal(old.filters.district, 'Адресный район');
+});
+test('influence follows only outgoing edges of the incident resource, transitively', () => {
+  const dependencies = [
+    { id: 'ab-water', source: 'a', target: 'b', resource: 'water' },
+    { id: 'ac-energy', source: 'a', target: 'c', resource: 'energy' },
+    { id: 'bc-water', source: 'b', target: 'c', resource: 'water' },
+    { id: 'cd-energy', source: 'c', target: 'd', resource: 'energy' },
+    { id: 'xa-energy', source: 'x', target: 'a', resource: 'energy' },
+  ];
+  assert.deepEqual([...influenceZone([{ id: 'a', resource: 'water' }], dependencies).nodes].sort(), ['a','b','c']);
+  assert.deepEqual([...influenceZone([{ id: 'a', resource: 'water' }], dependencies).edges].sort(), ['ab-water','bc-water']);
+  assert.deepEqual([...influenceZone([{ id: 'a', resource: 'energy' }], dependencies).nodes].sort(), ['a','c','d']);
+  assert.deepEqual([...influenceZone([{ id: 'a', resource: 'water' }, { id: 'a', resource: 'energy' }], dependencies).edges].sort(), ['ab-water','ac-energy','bc-water','cd-energy']);
+  assert.equal(influenceZone([{ id: 'a', resource: 'energy' }], dependencies).edges.has('xa-energy'), false);
+});
+test('active incidents seed independent resource influence zones', () => {
+  const graph = { objects: [
+    { id: 'a', resources: ['water','energy'], states: { water: 'incident', energy: 'normal' } },
+    { id: 'b', resources: ['water','energy'], states: { water: 'normal', energy: 'incident' } },
+    { id: 'c', resources: ['water','energy'], states: { water: 'normal', energy: 'normal' } },
+  ], dependencies: [
+    { id: 'ab-w', source: 'a', target: 'b', resource: 'water' },
+    { id: 'ac-e', source: 'a', target: 'c', resource: 'energy' },
+    { id: 'bc-e', source: 'b', target: 'c', resource: 'energy' },
+  ] };
+  const zone = influenceZone(graph.objects.flatMap(item => item.resources.filter(r => item.states[r] === 'incident').map(resource => ({ id: item.id, resource }))), graph.dependencies);
+  assert.deepEqual([...zone.nodes].sort(), ['a','b','c']);
+  assert.deepEqual([...zone.edges].sort(), ['ab-w','bc-e']);
+  assert.equal(objectState(graph.objects[0], 'water'), 'incident');
+  assert.equal(objectState(graph.objects[0], 'energy'), 'normal');
 });

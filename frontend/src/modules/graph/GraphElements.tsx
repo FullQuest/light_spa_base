@@ -4,21 +4,23 @@ import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
 import { roundedPath } from './routes';
 import { objectState, resourceNames, stateIcons, stateNames } from './types';
-export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; index: number; dependentCount: number; districtName?: string };
+export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; influence?: 'active' | 'hover' | null; index: number; dependentCount: number; districtName?: string; onHover?: (id: string | null) => void };
 export type MapNode = Node<ObjectNodeData, 'object'>;
-export const ObjectNode = memo(function ObjectNode({ data }: NodeProps<MapNode>) {
+export const ObjectNode = memo(function ObjectNode({ id, data }: NodeProps<MapNode>) {
   const state = objectState(data.item, data.resource);
-  return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''}`}>
+  return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''} ${data.influence ? `influence-${data.influence}` : ''}`}
+    onMouseEnter={() => data.onHover?.(id)} onMouseLeave={() => data.onHover?.(null)}>
     <Handle type="target" position={Position.Left} id="in" isConnectable={false} />
     <div className="object-meta"><span>{data.item.kind === 'station' ? '◈ Станция' : '▦ Потребитель'}</span><span>{data.districtName ?? 'Без района'}</span></div>
     <strong>{data.item.name}</strong>
-    <div className="resource-badges">{data.item.resources.map(r => <span className={`resource-badge ${r}`} key={r}>{r === 'water' ? '●' : 'ϟ'} {resourceNames[r]}</span>)}</div>
+    <div className="resource-badges">{data.item.resources.map(r => <span className={`resource-badge ${r}`} key={r} aria-label={`${resourceNames[r]}: ${stateNames[data.item.states[r] ?? 'unknown']}`} title={`${resourceNames[r]}: ${stateNames[data.item.states[r] ?? 'unknown']}`}>
+      {r === 'water' ? '●' : 'ϟ'} {resourceNames[r]} · {stateNames[data.item.states[r] ?? 'unknown']}</span>)}</div>
     <div className="object-bottom"><span className={`object-state ${state}`}>{stateIcons[state]} {stateNames[state]}</span><span className="dependency-index" title={`Зависимых объектов: ${data.dependentCount}`} aria-label={`Индекс ${data.index}, зависимых ${data.dependentCount}`}>Индекс {data.index}</span></div>
     <Handle type="source" position={Position.Right} id="out" isConnectable={false} />
   </div>;
 });
 export type RoutedEdgeData = { points: Point[]; routeStyle: 'rounded' | 'polyline'; editing: boolean; resource: Resource;
-  update: (id: string, points: Point[]) => void };
+  update: (id: string, points: Point[]) => void; influence?: 'active' | 'hover' | null };
 export type MapEdge = Edge<RoutedEdgeData, 'routed'>;
 export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, style, selected }: EdgeProps<MapEdge>) {
   const { screenToFlowPosition } = useReactFlow();
@@ -30,6 +32,10 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
   return <>
     <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 3 : 2.2 }} />
     <path className="resource-flow" opacity={style?.opacity} d={path} fill="none" stroke={style?.stroke ?? '#0284c7'} strokeWidth="3" strokeDasharray="3 22" pointerEvents="none" />
+    {data?.influence && <><defs><marker id={`influence-arrow-${id}`} markerWidth="10" markerHeight="10" refX="9" refY="0" orient="auto" markerUnits="strokeWidth"><path d="M0,-5L10,0L0,5Z" fill="#e11d48" /></marker></defs>
+      <path className={`influence-edge ${data.influence}`} d={path} fill="none" stroke="#e11d48"
+        strokeWidth={data.influence === 'active' ? 5 : 3.5} strokeDasharray={data.influence === 'active' ? '9 5' : '5 6'}
+        strokeLinecap="round" markerEnd={`url(#influence-arrow-${id})`} pointerEvents="none" /></>}
     <EdgeLabelRenderer><span className={`edge-resource-label ${data?.resource}`} style={{ transform: `translate(-50%, -50%) translate(${all[Math.floor((all.length - 1) / 2)].x + (all[Math.ceil((all.length - 1) / 2)].x - all[Math.floor((all.length - 1) / 2)].x) / 2}px,${all[Math.floor((all.length - 1) / 2)].y + (all[Math.ceil((all.length - 1) / 2)].y - all[Math.floor((all.length - 1) / 2)].y) / 2}px)`, opacity: style?.opacity }}>
       {data?.resource && resourceNames[data.resource]} →
     </span></EdgeLabelRenderer>
@@ -52,12 +58,13 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
 export function AnnotationProxy() { return null; }
 // Точки подключения существуют и у развёрнутого района: React Flow должен
 // зарегистрировать их до одновременного переключения узлов и проекции рёбер.
-export function GroupNode({ data }: NodeProps<Node<{ label: string; collapsed: boolean; highlighted: boolean; resources: Resource[]; state: ObjectState; toggle: () => void }>>) {
-  return <div className={data.collapsed ? `collapsed-district ${data.highlighted ? 'highlighted' : ''}` : 'map-group-label'}>
+export function GroupNode({ id, data }: NodeProps<Node<{ label: string; collapsed: boolean; highlighted: boolean; influence?: 'active' | 'hover' | null; resources: Resource[]; resourceStates: Partial<Record<Resource, ObjectState>>; state: ObjectState; toggle: () => void; onHover?: (id: string | null) => void }>>) {
+  return <div onMouseEnter={() => data.onHover?.(id)} onMouseLeave={() => data.onHover?.(null)} className={`${data.collapsed ? `collapsed-district ${data.highlighted ? 'highlighted' : ''}` : 'map-group-label'} ${data.influence ? `influence-${data.influence}` : ''}`}>
     <Handle type="target" position={Position.Left} id="in" isConnectable={false} style={{ opacity: data.collapsed ? 1 : 0 }} />
     <div className="district-heading"><strong>{data.label}</strong>
     <button className="nodrag nopan" aria-label={`${data.collapsed ? 'Развернуть' : 'Свернуть'} район ${data.label}`} onClick={e => { e.stopPropagation(); data.toggle(); }}>{data.collapsed ? 'Развернуть' : 'Свернуть'}</button></div>
-    {data.collapsed && <><div className="resource-badges">{data.resources.map(resource => <span key={resource} className={`resource-badge ${resource}`}>{resourceNames[resource]}</span>)}</div><span className={`object-state ${data.state}`}>{stateIcons[data.state]} {stateNames[data.state]}</span></>}
+    {data.collapsed && <><div className="resource-badges">{data.resources.map(resource => <span key={resource} className={`resource-badge ${resource}`}>
+      {resourceNames[resource]} · {stateNames[data.resourceStates[resource] ?? 'unknown']}</span>)}</div><span className={`object-state ${data.state}`}>{stateIcons[data.state]} {stateNames[data.state]}</span></>}
     <Handle type="source" position={Position.Right} id="out" isConnectable={false} style={{ opacity: data.collapsed ? 1 : 0 }} />
   </div>;
 }

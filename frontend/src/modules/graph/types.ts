@@ -33,6 +33,33 @@ export function descendants(id: string, edges: Dependency[]): Set<string> {
   }
   return found;
 }
+
+export interface InfluenceZone { nodes: Set<string>; edges: Set<string> }
+// Каждый аварийный источник распространяется только по совпадающему ресурсу
+// и только по направленным рёбрам source -> target из внешней топологии.
+export function influenceZone(sources: Iterable<{ id: string; resource: Resource }>, dependencies: Dependency[]): InfluenceZone {
+  const nodes = new Set<string>(), edges = new Set<string>();
+  const outgoing = new Map<string, Dependency[]>();
+  for (const edge of dependencies) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+  const byResource = new Map<Resource, Set<string>>();
+  for (const source of sources) {
+    nodes.add(source.id);
+    const starts = byResource.get(source.resource) ?? new Set<string>();
+    starts.add(source.id); byResource.set(source.resource, starts);
+  }
+  // Обходим граф один раз на ресурс, а не отдельно от каждой аварии.
+  for (const [resource, starts] of byResource) {
+    const reached = new Set(starts), queue = [...starts];
+    for (let i = 0; i < queue.length; i++) {
+      for (const edge of outgoing.get(queue[i]) ?? []) {
+        if (edge.resource !== resource) continue;
+        edges.add(edge.id);
+        if (!reached.has(edge.target)) { reached.add(edge.target); nodes.add(edge.target); queue.push(edge.target); }
+      }
+    }
+  }
+  return { nodes, edges };
+}
 export function visibleObjects(data: GraphData, prefs: Preferences) {
   const { resource, state, district, incidentsOnly } = prefs.filters;
   const hidden = new Set(prefs.hidden);
