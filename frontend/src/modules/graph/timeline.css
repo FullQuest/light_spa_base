@@ -1,0 +1,14 @@
+.timeline-panel { padding: 24px; margin-bottom: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.timeline-heading, .timeline-period, .timeline-player, .timeline-endpoints { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.timeline-heading { justify-content: space-between; margin-bottom: 20px; }
+.timeline-heading h1 { font-size: clamp(36px, 5vw, 56px); margin: 0; }
+.timeline-heading p { margin: 6px 0; }
+.timeline-period { align-items: end; margin-bottom: 20px; }
+.timeline-period label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.timeline-player output { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timeline-slider { width: 100%; margin: 20px 0 10px; cursor: pointer; accent-color: var(--accent); }
+.timeline-endpoints { justify-content: space-between; font-size: 12px; }
+.timeline-caption { font-size: 12px; color: var(--text-muted, #64748b); margin: 12px 0 0; }
+.timeline-panel details { margin-top: 12px; font-size: 13px; }
+.timeline-panel summary { cursor: pointer; }
+@media (max-width: 620px) { .timeline-panel { padding: 16px; } .timeline-player output { width: 100%; margin: 0; } .timeline-period input { max-width: 100%; } }

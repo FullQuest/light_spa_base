@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CurrentEvent, LiveGraph } from './snapshot';
 import type { Resource } from './types';
 import { resourceNames, stateIcons, stateNames } from './types';
-export function EventsPanel({ data, focused, resource, visibleIds, districtNames, onSelect }: {
-  data: LiveGraph; focused: string | null; resource: Resource | null; visibleIds: Set<string>; districtNames: Map<string, string>;
+export function EventsPanel({ data, focused, resource, visibleIds, districtNames, onSelect, historical = false }: {
+  historical?: boolean; data: LiveGraph; focused: string | null; resource: Resource | null; visibleIds: Set<string>; districtNames: Map<string, string>;
   onSelect: (event: CurrentEvent) => void;
 }) {
   const [statuses, setStatuses] = useState({ incident: true, maintenance: true, normal: false });
@@ -15,8 +15,8 @@ export function EventsPanel({ data, focused, resource, visibleIds, districtNames
   useEffect(() => {
     list.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [focused, resource]);
-  return <aside className="graph-events" aria-label="Актуальные события">
-    <header><h2>Актуальные события <span>{events.length} / {data.currentEvents.length}</span></h2>
+  return <aside className="graph-events" aria-label={historical ? "События на выбранный момент" : "Актуальные события"}>
+    <header><h2>{historical ? "События на выбранный момент" : "Актуальные события"} <span>{events.length} / {data.currentEvents.length}</span></h2>
       <fieldset className="event-filters"><legend>Состояния событий</legend>{Object.entries(statuses).map(([key, checked]) => <label key={key}><input type="checkbox" checked={checked} onChange={() => setStatuses(current => ({ ...current, [key]: !checked }))} />{stateNames[key as keyof typeof statuses]}</label>)}</fieldset>
       <fieldset className="event-filters"><legend>Ресурсы событий</legend>{Object.entries(resources).map(([key, checked]) => <label key={key}><input type="checkbox" checked={checked} onChange={() => setResources(current => ({ ...current, [key]: !checked }))} />{resourceNames[key as Resource]}</label>)}</fieldset>
       {focused && data.currentEvents.some(event => event.objectId === focused && (!resource || event.resource === resource)) && !events.some(event => event.objectId === focused && (!resource || event.resource === resource)) && <p role="status">События выбранного объекта скрыты фильтрами.</p>}

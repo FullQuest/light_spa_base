@@ -7,7 +7,9 @@ import { layoutGraph, NODE_WIDTH } from './layout';
 import { normalizeSnapshot, topologyKey } from './snapshot';
 import type { LiveGraph } from './snapshot';
 export interface LoadedGraph { data: LiveGraph; store: GraphStore; key: string }
-export function useLiveGraph(userId: number | undefined, attempt: number) {
+// В архиве live=false: та же раскладка из IndexedDB, один запрос топологии,
+// без фонового опроса и без перезаписи оформления основной страницы.
+export function useLiveGraph(userId: number | undefined, attempt: number, live = true) {
   const [loaded, setLoaded] = useState<LoadedGraph | null>(null);
   const [error, setError] = useState('');
   const [refreshError, setRefreshError] = useState('');
@@ -26,8 +28,9 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
       const timeout = setTimeout(() => controller?.abort(), 2800);
       try {
         // Для живой карты момент снимка задаёт сервер ПОСЛЕ синхронизации.
-        // Это исключает рассинхронизацию часов браузера и сервера. Для будущего
-        // исторического просмотра передаётся фиксированный at и опрос отключается.
+        // Это исключает рассинхронизацию часов браузера и сервера. В архиве
+        // здесь читается только текущая топология; состояния восстанавливаются
+        // локально по полному архиву событий (timeline.ts), без повторных запросов.
         const data = normalizeSnapshot(await authRequest<unknown>('/graph',
           { signal: controller.signal, cache: 'no-store' }));
         if (!active) return;
@@ -80,19 +83,19 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
         clearTimeout(timeout); busy = false;
         // Интервал отсчитывается от начала запроса, обработка не добавляется
         // к каждой секунде. Долгие запросы не перекрываются и не копятся в очереди.
-        if (active) timer = setTimeout(() => { if (!document.hidden) void refresh(); },
+        if (active && live) timer = setTimeout(() => { if (!document.hidden) void refresh(); },
           Math.max(0, 1000 - (performance.now() - startedAt)));
       }
     }
-    const resume = () => { if (!document.hidden) { clearTimeout(timer); void refresh(); } };
+    const resume = () => { if (live && !document.hidden) { clearTimeout(timer); void refresh(); } };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('online', resume);
     void refresh();
     return () => { active = false; clearTimeout(timer); controller?.abort(); document.removeEventListener('visibilitychange', resume); window.removeEventListener('online', resume); };
-  }, [userId, attempt]);
+  }, [userId, attempt, live]);
   const store = loaded?.store, key = loaded?.key;
   useEffect(() => {
-    if (!store || !key) return;
+    if (!store || !key || !live) return;
     let timer: ReturnType<typeof setTimeout>;
     const save = () => {
       clearTimeout(timer);
@@ -102,6 +105,6 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
     save();
     const unsubscribe = store.subscribe(save);
     return () => { clearTimeout(timer); unsubscribe(); void savePreferences(key, store.getState().present).catch(() => {}); };
-  }, [store, key]);
+  }, [store, key, live]);
   return { loaded, error, refreshError, storageWarning, receivedAt };
 }

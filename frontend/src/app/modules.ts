@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import type { UserPublic } from '../auth/types';
 // import { HomePage } from '../modules/home/HomePage';
 const GraphPage = lazy(() => import('../modules/graph/GraphPage').then(module => ({ default: module.GraphPage })));
+const GraphArchivePage = lazy(() => import('../modules/graph/GraphArchivePage').then(module => ({ default: module.GraphArchivePage })));
 const EventArchivePage = lazy(() => import('../modules/events/EventArchivePage').then(module => ({ default: module.EventArchivePage })));
 const DatabaseSyncPage = lazy(() => import('../modules/events/DatabaseSyncPage').then(module => ({ default: module.DatabaseSyncPage })));
 
@@ -30,6 +31,7 @@ export const features = { profile: true, users: true, roles: true, documents: tr
 export const modules: AppModule[] = [
   // { path: '/', title: 'Главная', Page: HomePage },
   { path: '/graph', title: 'Схема', Page: GraphPage },
+  { path: '/graph/archive', title: 'Архив схемы', Page: GraphArchivePage },
   { path: '/events/archive', title: 'Архив событий', Page: EventArchivePage },
   { path: '/infrastructure/data', title: 'Данные графа', Page: DatabaseSyncPage, superadminOnly: true },
   // { path: '/profile', title: 'Профиль', Page: ProfilePage, enabled: features.profile },

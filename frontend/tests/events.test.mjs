@@ -23,3 +23,35 @@ test('archive filters combine object, event type, resource, local calendar dates
   assert.deepEqual(filterArchive(events, { objectId: '', statusName: '', resource: '', from: '', to: '', search: 'трубы' }).map(e => e.id), ['10']);
   assert.deepEqual(filterArchive(events, { objectId: '', statusName: '', resource: '', from: '2026-03-05', to: '2026-03-03', search: '' }), []);
 });
+
+import { historicalSnapshot, timelinePoints } from '../src/modules/graph/timeline.ts';
+const history = [
+  { id: '1', objectId: 'a', resource: 'water', status: 'normal', occurredAt: '2026-01-01T00:00:00Z' },
+  { id: '2', objectId: 'a', resource: 'energy', status: 'maintenance', occurredAt: '2026-01-01T00:00:00Z' },
+  { id: '9', objectId: 'a', resource: 'water', status: 'normal', occurredAt: '2026-01-01T00:01:00Z' },
+  { id: '10', objectId: 'a', resource: 'water', status: 'incident', occurredAt: '2026-01-01T03:01:00+03:00' },
+  { id: '11', objectId: 'a', resource: 'water', status: 'normal', occurredAt: '2026-01-03T00:00:00Z' },
+];
+const topology = { objects: [{ id: 'a', resources: ['water', 'energy'], states: { water: 'normal' } }], dependencies: [{ id: 'edge' }], topologyRevision: 'current' };
+test('timeline uses unique actual timestamps, sorted chronologically with inclusive bounds', () => {
+  assert.deepEqual(timelinePoints(history), ['2026-01-01T00:00:00.000Z', '2026-01-01T00:01:00.000Z', '2026-01-03T00:00:00.000Z']);
+  assert.deepEqual(timelinePoints(history, '2026-01-01T00:01:00Z', '2026-01-01T00:01:00Z'), ['2026-01-01T00:01:00.000Z']);
+  assert.deepEqual(timelinePoints(history, '2026-01-04', '2026-01-05'), []);
+  assert.deepEqual(timelinePoints([], '', ''), []);
+  assert.deepEqual(timelinePoints(history, '2026-01-04', '2026-01-01'), []);
+});
+test('historical states include pre-period events and resolve equal timestamps by numeric ID', () => {
+  const data = historicalSnapshot(topology, history, '2026-01-02T00:00:00Z');
+  assert.deepEqual(data.objects[0].states, { water: 'incident', energy: 'maintenance' });
+  assert.equal(data.currentEvents.find(event => event.resource === 'water').id, '10');
+  assert.equal(data.dependencies, topology.dependencies);
+  assert.equal(data.topologyRevision, 'current');
+  assert.deepEqual(topology.objects[0].states, { water: 'normal' });
+  assert.deepEqual(historicalSnapshot(topology, history, '2025-12-31T00:00:00Z').objects[0].states, {});
+  assert.equal(historicalSnapshot(topology, history, '2026-01-03T00:00:00Z').objects[0].states.water, 'normal');
+});
+test('events for removed objects or resources do not become current graph events', () => {
+  const data = historicalSnapshot(topology, [...history, { ...history[0], id: '99', objectId: 'removed' },
+    { ...history[0], id: '100', resource: 'removed' }], '2026-01-03T00:00:00Z');
+  assert.equal(data.currentEvents.length, 2);
+});

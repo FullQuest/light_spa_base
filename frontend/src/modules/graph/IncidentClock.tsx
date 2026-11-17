@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { formatDuration } from './incidents';
 const Clock = createContext(0);
 // Один таймер на страницу; пересчитываются только подписи времени, не геометрия.
-export function IncidentClock({ children }: { children: ReactNode }) {
+export function IncidentClock({ children, at }: { children: ReactNode; at?: string }) {
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
-  return <Clock.Provider value={now}>{children}</Clock.Provider>;
+  useEffect(() => { if (at) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [at]);
+  return <Clock.Provider value={at ? Date.parse(at) : now}>{children}</Clock.Provider>;
 }
 export function IncidentDuration({ since }: { since: string }) {
   const now = useContext(Clock);

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { Background, ControlButton, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
@@ -33,10 +34,19 @@ export function GraphPage() {
   const { loaded, error, refreshError, storageWarning, receivedAt } = useLiveGraph(userId, attempt);
   if (error) return <section><p role="alert">{error}</p><button onClick={() => setAttempt(a => a + 1)}>Повторить</button></section>;
   if (!loaded) return <section><p role="status">Загрузка объектов и расчёт схемы…</p></section>;
-  return <Provider store={loaded.store}><ReactFlowProvider><IncidentClock><GraphCanvas data={loaded.data} storageWarning={storageWarning} refreshError={refreshError} receivedAt={receivedAt} /></IncidentClock></ReactFlowProvider></Provider>;
+  return <GraphView store={loaded.store} data={loaded.data} storageWarning={storageWarning} refreshError={refreshError} receivedAt={receivedAt} />;
 }
 
-function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data: LiveGraph; storageWarning: string; refreshError: string; receivedAt: string | null }) {
+interface GraphViewProps {
+  data: LiveGraph; storageWarning: string; refreshError: string; receivedAt: string | null;
+  historical?: boolean; children?: ReactNode;
+}
+export function GraphView({ store, ...props }: GraphViewProps & { store: GraphStore }) {
+  return <Provider store={store}><ReactFlowProvider><IncidentClock at={props.historical ? props.data.asOf : undefined}>
+    <GraphCanvas {...props} />
+  </IncidentClock></ReactFlowProvider></Provider>;
+}
+function GraphCanvas({ data, storageWarning, refreshError, receivedAt, historical = false, children }: GraphViewProps) {
   const dispatch = useDispatch<GraphStore['dispatch']>();
   const prefs = useSelector((state: GraphState) => state.present);
   const canUndo = useSelector((state: GraphState) => state.past.length > 0);
@@ -234,12 +244,13 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
     void flow.setCenter(p.x + NODE_WIDTH / 2, p.y + NODE_HEIGHT / 2, { zoom: 1, duration: 300 });
   };
   return <section className="graph-page">
+    {children}
     <div className="graph-heading">
-      <div className="graph-modes" role="group" aria-label="Режим работы">{([['view', 'Просмотр'], ['graph', 'Редактирование графа'], ['dispatcher', 'Инструменты диспетчера']] as const).map(([value, title]) =>
-        <button key={value} aria-pressed={mode === value} className={mode === value ? 'btn-primary' : ''} onClick={() => { setMode(value); setSelectedAnnotation(null); setSelectedEdge(null); }}>{title}</button>)}</div>
+      {!historical && <div className="graph-modes" role="group" aria-label="Режим работы">{([['view', 'Просмотр'], ['graph', 'Редактирование графа'], ['dispatcher', 'Инструменты диспетчера']] as const).map(([value, title]) =>
+        <button key={value} aria-pressed={mode === value} className={mode === value ? 'btn-primary' : ''} onClick={() => { setMode(value); setSelectedAnnotation(null); setSelectedEdge(null); }}>{title}</button>)}</div>}
       <div className="graph-summary"><strong>{visible.length} / {data.objects.length}</strong><span>объектов · {edges.length} связей</span></div>
     </div>
-    <SyncStatus data={data} receivedAt={receivedAt} />
+    {!historical && <SyncStatus data={data} receivedAt={receivedAt} />}
     {refreshError && <p role="alert">{refreshError}</p>}
     {storageWarning && <p role="alert">{storageWarning}</p>}
     <div className="graph-toolbar">
@@ -333,7 +344,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
       </ReactFlow>
       {!visible.length && <div className="graph-empty">Нет объектов по выбранным условиям. Измените фильтры или покажите скрытые объекты.</div>}
       <div className="graph-legend"><span>✓ Норма</span><span>◆ Ремонтные работы</span><span>! Авария</span><span className="affected-legend">↳ Под влиянием аварии</span><span>? Нет данных</span><span className="water">━ Вода</span><span className="energy">━ Электроэнергия</span></div>
-    </div><EventsPanel data={data} focused={focusedObject?.id ?? null} resource={eventResource}
+    </div><EventsPanel data={data} focused={focusedObject?.id ?? null} resource={eventResource} historical={historical}
       visibleIds={visibleIds} districtNames={new Map([...districtFor].map(([id, group]) => [id, group.name]))} onSelect={selectEvent} /></div>
     <div className="graph-footer">{notice && <span role="status">{notice}</span>}<a href="/licenses/graph.txt" target="_blank" rel="noreferrer">Лицензии</a></div>
   </section>;
