@@ -1,0 +1,23 @@
+# Только локальная имитация внешнего источника; основной compose не меняется.
+services:
+  postgres-fixture:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: main
+      POSTGRES_USER: anon
+      POSTGRES_PASSWORD: anon
+    volumes:
+      - ./backup.sql:/fixture/backup.sql:ro
+      - ./tools/restore-postgres-fixture.sh:/docker-entrypoint-initdb.d/restore.sh:ro
+      - postgres-fixture-data:/var/lib/postgresql
+    networks:
+      default:
+        aliases:
+          - as.start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anon -d main"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  postgres-fixture-data:

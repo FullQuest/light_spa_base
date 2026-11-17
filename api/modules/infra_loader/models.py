@@ -44,3 +44,10 @@ class Event(SQLModel, table=True):
     resource_type: str = Field(max_length=15)
     # timestamp без таймзоны — как в PostgreSQL, без каких-либо преобразований.
     occurred_at: datetime
+
+
+class InfrastructureSync(SQLModel, table=True):
+    """Последняя успешная синхронизация переживает перезапуск API."""
+
+    id: int = Field(default=1, primary_key=True)
+    synced_at: datetime
