@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:graph": "node --experimental-strip-types --test tests/graph.test.mjs"
+    "test:graph": "node --experimental-strip-types --test tests/graph.test.mjs tests/events.test.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.14.0",

@@ -1,0 +1,37 @@
+.archive-page { color: var(--text); }
+.archive-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.archive-heading h1 { margin: 4px 0 0; }
+.archive-eyebrow { font-size: 11px; font-weight: 700; color: var(--accent); }
+.archive-count { font-size: 18px; color: var(--text-h); }
+.archive-filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); align-items: end; gap: 12px; margin-bottom: 16px; padding: 16px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.archive-filters label { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--text-h); font-size: 12px; font-weight: 600; }
+.archive-filters .archive-search { grid-column: span 2; }
+.archive-filters button { min-height: 40px; }
+.archive-message { padding: 16px 0; }
+.archive-message button { margin-top: 12px; }
+.archive-table-wrap { width: 100%; overflow: auto; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.archive-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.archive-table th { position: sticky; top: 0; z-index: 1; background: var(--bg); color: var(--text-h); font-size: 11px; font-weight: 700; }
+.archive-table th, .archive-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.archive-table tbody tr:hover { background: color-mix(in srgb, var(--accent-bg) 40%, transparent); }
+.archive-table td:first-child { white-space: nowrap; }
+.archive-table code { font-size: 12px; }
+.archive-table time { white-space: nowrap; }
+.archive-table td > strong, .archive-table td > small { display: block; }
+.archive-table td > small { margin-top: 3px; color: var(--text); font-size: 10px; }
+.archive-status { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #ffe4e6; color: #9f1239; font-size: 11px; font-weight: 700; }
+.archive-status.normal { background: #dcfce7; color: #166534; }
+.archive-status.maintenance { background: #fef3c7; color: #92400e; }
+.archive-empty { padding: 24px 12px; text-align: center; color: var(--text); }
+.archive-footnote { padding: 8px 0; font-size: 11px; }
+.archive-object-link { display: inline-flex; align-self: flex-start; min-height: 38px; align-items: center; border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 12px; text-decoration: none; }
+.archive-object-link:hover { background: var(--accent-bg); }
+@media (max-width: 760px) {
+  .archive-filters { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .archive-filters .archive-search { grid-column: span 2; }
+  .archive-table { min-width: 900px; }
+}
+@media (max-width: 420px) {
+  .archive-filters { grid-template-columns: minmax(0, 1fr); }
+  .archive-filters .archive-search { grid-column: auto; }
+}

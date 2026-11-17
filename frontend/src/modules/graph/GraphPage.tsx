@@ -299,6 +299,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
           </div>;
         })}
         <small>Индекс: {indices[focusedObject.id].index} / 10 · Всего зависимых: {indices[focusedObject.id].count}</small><small>ID: {focusedObject.id}</small><small>Прямых зависимых: {data.dependencies.filter(e => e.source === focusedObject.id).length}</small>
+        <a className="archive-object-link" href={`/events/archive?objectId=${encodeURIComponent(focusedObject.id)}`} target="_blank" rel="noreferrer">Все события объекта ↗</a>
       </div>}
     </aside><div className="graph-canvas" ref={canvas} data-testid="graph-canvas">
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
