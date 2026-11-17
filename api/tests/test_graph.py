@@ -43,7 +43,7 @@ class GraphTests(unittest.TestCase):
     def test_real_snapshot_uses_latest_event_per_resource_and_numeric_tie_break(self):
         self.seed()
         result = loader.graph_snapshot(self.session, datetime(2026, 11, 16, 9, tzinfo=timezone.utc))
-        self.assertFalse(result['demo'])
+        self.assertNotIn('demo', result)
         self.assertEqual(len(result['objects']), 3)
         self.assertEqual([(e['source'], e['target']) for e in result['dependencies']], [('1', '2'), ('2', '3')])
         self.assertEqual([e['id'] for e in result['currentEvents']], ['5', '3'])

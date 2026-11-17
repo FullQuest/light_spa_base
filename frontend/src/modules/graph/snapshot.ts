@@ -1,7 +1,7 @@
 import type { GraphData, InfrastructureObject, ObjectState, Resource } from './types';
 
-// Контракт для агента бэкенда: один атомарный снимок графа и событий на asOf.
-// GET /api/graph?at=<ISO-8601 UTC>. Без at сервер выбирает текущее время сам.
+// Один атомарный снимок графа и событий на asOf.
+// GET /api/graph?at=<ISO-8601>. Без at сервер выбирает текущее время сам.
 // currentEvents — последнее событие для каждой пары objectId + resource,
 // occurredAt <= asOf; при одинаковом времени побеждает больший числовой id.
 // status — уже нормализованная сервером категория; statusName — исходное название.
@@ -11,12 +11,12 @@ export interface CurrentEvent {
 }
 export interface GraphSnapshot {
   topologyRevision: string; eventRevision: string; asOf: string; syncedAt: string | null;
-  sourceStatus: 'online' | 'stale' | 'unavailable'; demo: boolean;
+  sourceStatus: 'online' | 'stale' | 'unavailable';
   objects: InfrastructureObject[]; dependencies: GraphData['dependencies']; currentEvents: CurrentEvent[];
 }
 export interface LiveGraph extends GraphData {
   topologyRevision: string; eventRevision: string; asOf: string; syncedAt: string | null;
-  sourceStatus: GraphSnapshot['sourceStatus']; currentEvents: CurrentEvent[]; legacyDemo: boolean;
+  sourceStatus: GraphSnapshot['sourceStatus']; currentEvents: CurrentEvent[];
 }
 function validTime(value: unknown): value is string {
   return typeof value === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
@@ -61,17 +61,10 @@ export function normalizeSnapshot(raw: unknown): LiveGraph {
     const degree = indegree.get(target)! - 1; indegree.set(target, degree); if (!degree) roots.push(target);
   }
   if (roots.length !== objects.length) throw new Error('Источник вернул циклический граф');
-  // Только временная совместимость с нынешней demo-v1 заглушкой. Это НЕ реальные
-  // события БД: фиксированная дата и явная маркировка в UI. После слияния бэкенда
-  // currentEvents полностью определяют состояния, даже если objects содержит states.
-  const legacyDemo = raw.demo === true && raw.currentEvents === undefined && raw.revision === 'demo-v1';
-  const asOf = legacyDemo ? new Date().toISOString() : raw.asOf;
+  // Состояние строится только по событиям, а не по потенциально устаревшим states.
+  const asOf = raw.asOf;
   if (!validTime(asOf)) throw new Error('В снимке отсутствует корректное время asOf');
-  const incoming: CurrentEvent[] = legacyDemo ? objects.flatMap(item => item.resources.flatMap((resource, index) => {
-    const status = item.states?.[resource];
-    return status && status !== 'unknown' ? [{ id: `demo-${item.id}-${resource}`, objectId: item.id, resource,
-      occurredAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(), status, statusName: 'Демонстрационное событие' }] : [];
-  })) : raw.currentEvents as CurrentEvent[];
+  const incoming = raw.currentEvents;
   if (!Array.isArray(incoming)) throw new Error('В снимке отсутствует currentEvents');
   const eventIds = new Set<string>();
   for (const event of incoming) {
@@ -83,13 +76,13 @@ export function normalizeSnapshot(raw: unknown): LiveGraph {
   const currentEvents = latestEvents(incoming, asOf);
   const states = new Map<string, InfrastructureObject['states']>();
   for (const event of currentEvents) states.set(event.objectId, { ...states.get(event.objectId), [event.resource]: event.status });
-  if (!legacyDemo && (typeof raw.topologyRevision !== 'string' || typeof raw.eventRevision !== 'string' ||
+  if (typeof raw.topologyRevision !== 'string' || typeof raw.eventRevision !== 'string' ||
     !['online', 'stale', 'unavailable'].includes(String(raw.sourceStatus)) ||
-    (raw.syncedAt !== null && (!validTime(raw.syncedAt))))) throw new Error('Некорректные метаданные синхронизации');
-  return { revision: legacyDemo ? 'demo-v1' : String(raw.topologyRevision), demo: raw.demo === true,
-    topologyRevision: legacyDemo ? 'demo-v1' : String(raw.topologyRevision), eventRevision: legacyDemo ? 'demo-events-v1' : String(raw.eventRevision),
-    asOf, syncedAt: legacyDemo ? null : raw.syncedAt as string | null,
-    sourceStatus: legacyDemo ? 'unavailable' : raw.sourceStatus as GraphSnapshot['sourceStatus'], legacyDemo,
+    (raw.syncedAt !== null && (!validTime(raw.syncedAt)))) throw new Error('Некорректные метаданные синхронизации');
+  return { revision: String(raw.topologyRevision),
+    topologyRevision: String(raw.topologyRevision), eventRevision: String(raw.eventRevision),
+    asOf, syncedAt: raw.syncedAt as string | null,
+    sourceStatus: raw.sourceStatus as GraphSnapshot['sourceStatus'],
     objects: objects.map(item => ({ ...item, states: states.get(item.id) ?? {} })), dependencies, currentEvents };
 }
 // Геометрию сравниваем отдельно от событий: обновление состояния не запускает ELK.

@@ -308,7 +308,6 @@ def graph_snapshot(session: Session, requested_at: datetime | None = None) -> di
         "eventRevision": _revision(event_objects),
         "asOf": as_of,
         **metadata,
-        "demo": False,
         "objects": objects,
         "dependencies": edges,
         "currentEvents": event_objects,

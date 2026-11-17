@@ -55,7 +55,7 @@ test('viewport movements do not fill undo history and user stores are isolated',
 import { latestEvents, normalizeSnapshot, topologyKey } from '../src/modules/graph/snapshot.ts';
 import { moveRoutes, roundedPath } from '../src/modules/graph/routes.ts';
 const snapshot = () => ({
-  topologyRevision: 't1', eventRevision: 'v1', asOf: '2026-11-17T12:00:00Z', syncedAt: '2026-11-17T11:59:59Z', sourceStatus: 'online', demo: false,
+  topologyRevision: 't1', eventRevision: 'v1', asOf: '2026-11-17T12:00:00Z', syncedAt: '2026-11-17T11:59:59Z', sourceStatus: 'online',
   objects: objects.map(o => ({ ...o, name: o.id, kind: 'station', address: '', description: '' })), dependencies: [{ id: 'ab', source: 'a', target: 'b', resource: 'water' }],
   currentEvents: [
     { id: '2', objectId: 'a', resource: 'water', occurredAt: '2026-11-17T11:00:00Z', status: 'incident', statusName: 'Авария' },
@@ -74,13 +74,14 @@ test('states come from events, not stale states on objects; missing events are u
   assert.equal(objectState(data.objects[1]), 'unknown');
   assert.equal(objectState({ resources: ['water', 'energy'], states: { water: 'normal' } }), 'unknown');
   assert.equal(data.currentEvents.length, 2);
-  assert.equal(data.legacyDemo, false);
   const raw = snapshot(); raw.currentEvents = [];
   assert.equal(objectState(normalizeSnapshot(raw).objects[0]), 'unknown');
 });
 test('malformed updates fail rather than silently replace a valid snapshot', () => {
   const raw = snapshot();
   assert.throws(() => normalizeSnapshot({ ...raw, currentEvents: undefined }));
+  assert.throws(() => normalizeSnapshot({ ...raw, demo: true, revision: 'demo-v1', topologyRevision: undefined,
+    eventRevision: undefined, currentEvents: undefined, asOf: undefined, syncedAt: null, sourceStatus: undefined }));
   assert.throws(() => normalizeSnapshot({ ...raw, asOf: 'invalid' }));
   assert.throws(() => normalizeSnapshot({ ...raw, dependencies: [{ id: 'bad', source: 'a', target: 'missing', resource: 'water' }] }));
   assert.throws(() => normalizeSnapshot({ ...raw, currentEvents: [{ ...raw.currentEvents[0], status: 'unknown' }] }));

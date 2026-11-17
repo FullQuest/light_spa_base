@@ -5,7 +5,7 @@ export interface InfrastructureObject {
   states: Partial<Record<Resource, ObjectState>>; district: string; address: string; description: string;
 }
 export interface Dependency { id: string; source: string; target: string; resource: Resource }
-export interface GraphData { revision: string; demo: boolean; objects: InfrastructureObject[]; dependencies: Dependency[] }
+export interface GraphData { revision: string; objects: InfrastructureObject[]; dependencies: Dependency[] }
 export interface Point { x: number; y: number }
 export interface Group { id: string; name: string; members: string[]; collapsed?: boolean }
 export interface Annotation { id: string; kind: 'text' | 'line' | 'freehand' | 'rectangle'; text: string; position: Point; end?: Point; points?: Point[]; color?: string; width?: number; erasures?: { x: number; y: number; radius: number }[] }

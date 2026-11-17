@@ -15,7 +15,7 @@ export function SyncStatus({ data, receivedAt }: { data: LiveGraph; receivedAt: 
   const delayed = data.sourceStatus === 'online' && age > 5000;
   const unavailable = data.sourceStatus !== 'online';
   return <div className={`graph-sync ${unavailable || delayed ? 'graph-sync-warning' : ''}`} role="status">
-    <strong>{data.legacyDemo ? 'Демонстрационные данные' : unavailable
+    <strong>{unavailable
       ? 'Источник недоступен · показан последний сохранённый снимок'
       : delayed ? 'Обновление задерживается более 5 с · актуальность данных не подтверждена' : 'Источник доступен'}</strong>
     <span>Снимок: {new Date(data.asOf).toLocaleString('ru-RU')} · Синхронизация: {data.syncedAt ? new Date(data.syncedAt).toLocaleString('ru-RU') : 'нет данных'}</span>
