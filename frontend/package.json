@@ -7,11 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:graph": "node --experimental-strip-types --test tests/graph.test.mjs"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.14.0",
+    "@xyflow/react": "^13.0.1",
+    "elkjs": "^0.12.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-redux": "^9.3.1",
     "react-router": "^8.5.1"
   },
   "overrides": {

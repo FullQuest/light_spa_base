@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 import { useAuth } from '../auth/auth';
 import { canOpenModule, modules } from './modules';
@@ -29,14 +30,14 @@ export function Layout() {
         <button type="button" className="btn-link" onClick={logout}>Выйти</button>
       </header>
       <main className="dashboard-main">
-        <Routes>
+        <Suspense fallback={<p role="status">Загрузка раздела…</p>}><Routes>
           {enabled.map((module) => (
             <Route key={module.path} path={module.path} element={canOpen(module)
               ? <module.Page />
               : <RouteMessage title="Нет доступа" />} />
           ))}
           <Route path="*" element={<RouteMessage title="Страница не найдена" />} />
-        </Routes>
+        </Routes></Suspense>
       </main>
     </div>
   );

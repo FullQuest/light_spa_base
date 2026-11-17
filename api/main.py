@@ -1,3 +1,4 @@
+from modules.graph.router import router as graph_router
 from fastapi import FastAPI
 from sqlmodel import SQLModel, Session
 from core.db import engine
@@ -19,6 +20,7 @@ with Session(engine) as session:
 init_superadmin()
 
 app = FastAPI(title="Light SPA API", lifespan=sources_lifespan)
+app.include_router(graph_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(user_admin_router, prefix="/api")

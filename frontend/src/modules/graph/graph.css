@@ -1,0 +1,71 @@
+.dashboard-main:has(.graph-page) { max-width: none; padding: 24px 28px; }
+.graph-page { --map-ink: #20334e; --map-muted: #64748b; }
+.graph-heading { display: flex; gap: 24px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+.graph-heading h1 { margin: 4px 0 0; }
+.graph-eyebrow { font-size: 11px; letter-spacing: 2px; color: var(--accent); font-weight: 700; }
+.graph-summary { margin-left: auto; display: flex; flex-direction: column; text-align: right; font-size: 13px; }
+.graph-summary strong { font-size: 24px; }
+.graph-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 14px; }
+.graph-toolbar label, .graph-sidebar label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; }
+.graph-toolbar .graph-check { flex-direction: row; align-items: center; align-self: center; font-size: 13px; }
+.graph-toolbar button { font-size: 12px; min-height: 40px; }
+.graph-search { position: relative; flex: 1; min-width: 200px; }
+.graph-search input { width: 100%; }
+.graph-search-results { position: absolute; top: 100%; right: 0; left: 0; z-index: 30; max-height: 300px; overflow: auto; background: var(--surface); box-shadow: 0 10px 30px #142e4526; border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+.graph-search-results button { width: 100%; text-align: left; display: flex; flex-direction: column; margin-bottom: 4px; }
+.graph-workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; }
+.graph-sidebar { height: 74vh; min-height: 540px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.graph-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.graph-panel h2 { font-size: 15px; margin: 0; }
+.graph-panel p, .graph-panel small { font-size: 12px; line-height: 1.6; }
+.graph-panel button { font-size: 12px; }
+.graph-button-row { display: flex; gap: 6px; }
+.graph-button-row button { flex: 1; }
+.graph-canvas { height: 74vh; min-height: 540px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: relative; color: var(--map-ink); }
+.graph-canvas .react-flow { background: #f1f5f9; }
+.graph-canvas .react-flow__node-object { width: 218px; height: 116px; }
+.infrastructure-node { width: 218px; height: 116px; background: #fff; border: 1px solid #cad5e2; border-left: 5px solid #159777; border-radius: 12px; padding: 10px 12px; box-shadow: 0 3px 9px #172a4610; color: #20334e; display: flex; flex-direction: column; gap: 3px; }
+.infrastructure-node.consumer { border-radius: 3px; }
+.infrastructure-node.incident { border-left-color: #db4555; }
+.infrastructure-node.maintenance { border-left-color: #d99116; }
+.infrastructure-node strong { color: #20334e; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.infrastructure-node small { font-size: 10px; color: #64748b; }
+.object-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; color: #64748b; }
+.object-state { display: inline-flex; align-self: flex-start; gap: 4px; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; background: #e5f5ef; color: #086a50; }
+.object-state.incident { background: #fff0f1; color: #b31c33; }
+.object-state.maintenance { background: #fff4da; color: #8b5a00; }
+.infrastructure-node.highlighted { outline: 3px solid #7c3aed; box-shadow: 0 0 0 6px #7c3aed20; }
+.infrastructure-node .react-flow__handle { width: 7px; height: 7px; background: #64748b; border-color: white; }
+.graph-canvas .react-flow__controls { bottom: 48px; }
+.graph-canvas .react-flow__controls button { border-radius: 0; background: #fff; color: #20334e; padding: 5px; }
+.graph-canvas .react-flow__minimap { bottom: 44px; background: #fff; border: 1px solid #d0dbe7; border-radius: 6px; overflow: hidden; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 9px 12px; position: absolute; bottom: 0; left: 0; right: 0; background: #ffffffed; color: #52637a; font-size: 11px; pointer-events: none; border-top: 1px solid #dbe3eb; }
+.water { color: #0284c7; }.energy { color: #a96b00; }
+.route-handle { position: absolute; pointer-events: all; width: 14px; height: 14px; min-height: 0; padding: 0; border: 2px solid #fff; border-radius: 50%; background: #7c3aed; cursor: move; touch-action: none; }
+.infrastructure-group { background: #8b5cf60b; border: 2px dashed #8b5cf6; border-radius: 14px; pointer-events: none !important; }
+.map-group-label { position: absolute; top: 6px; left: 12px; color: #6d28d9; font-size: 13px; font-weight: 700; pointer-events: auto; cursor: move; }
+.graph-group-entry { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 12px; }
+.graph-group-entry button { padding: 2px 8px; }
+.map-note { padding: 12px 16px; max-width: 300px; min-width: 120px; white-space: pre-wrap; background: #fff7c9; color: #694f10; border: 1px solid #e0c875; border-radius: 4px; box-shadow: 0 3px 8px #2b230d15; font-size: 14px; }
+.map-line { color: #875dc7; position: relative; min-width: 24px; min-height: 24px; }
+.line-origin { position: absolute; top: -10px; left: -5px; cursor: move; }
+.line-end { position: absolute; transform: translate(-50%, -50%); width: 14px; height: 14px; padding: 0; background: #875dc7; border: 2px solid #fff; border-radius: 50%; touch-action: none; }
+.annotation-selected { outline: 2px dashed #7c3aed; outline-offset: 5px; }
+.placing .react-flow__pane { cursor: crosshair; }
+.graph-empty { position: absolute; top: 30%; left: 15%; right: 15%; background: #fff; color: #52637a; padding: 24px; border-radius: 8px; text-align: center; }
+.graph-footer { display: flex; gap: 12px; justify-content: space-between; padding: 10px 4px; font-size: 11px; }
+.object-details > div { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: space-between; font-size: 12px; }
+@media (max-width: 900px) {
+ .dashboard-main:has(.graph-page) { padding: 16px; }
+ .graph-workspace { grid-template-columns: 210px minmax(0, 1fr); }
+ .graph-heading { gap: 12px; }.graph-summary { margin-left: 0; }
+}
+@media (max-width: 620px) {
+ .graph-workspace { grid-template-columns: 1fr; }
+ .graph-sidebar { height: 240px; min-height: 0; }
+ .graph-canvas { height: 65vh; min-height: 440px; }
+ .graph-toolbar label { flex: 1; min-width: 120px; }
+ .graph-footer { flex-direction: column; }
+}
+/* Selected edges are elevated by React Flow; route controls must stay above them. */
+.graph-canvas .react-flow__edgelabel-renderer { z-index: 1001; }

@@ -1,16 +1,8 @@
+import { lazy } from 'react';
 import type { ComponentType } from 'react';
 import type { UserPublic } from '../auth/types';
 import { HomePage } from '../modules/home/HomePage';
-import { ProfilePage } from '../modules/profile/ProfilePage';
-import { UsersPage } from '../modules/users/UsersPage';
-import { RolesPage } from '../modules/roles/RolesPage';
-import { DocumentsPage } from '../modules/documents/DocumentsPage';
-import { DocumentPage } from '../modules/documents/DocumentPage';
-import { SearchPage } from '../modules/search/SearchPage';
-import { SourcesPage } from '../modules/sources/SourcesPage';
-import { SourcePage } from '../modules/sources/SourcePage';
-import { RequestsPage } from '../modules/requests/RequestsPage';
-import { RequestPage } from '../modules/requests/RequestPage';
+const GraphPage = lazy(() => import('../modules/graph/GraphPage').then(module => ({ default: module.GraphPage })));
 
 interface AppModule {
   path: string;
@@ -35,6 +27,7 @@ export const features = { profile: true, users: true, roles: true, documents: tr
 
 export const modules: AppModule[] = [
   { path: '/', title: 'Главная', Page: HomePage },
+  { path: '/graph', title: 'Граф объектов', Page: GraphPage },
   // { path: '/profile', title: 'Профиль', Page: ProfilePage, enabled: features.profile },
   // { path: '/users', title: 'Пользователи', Page: UsersPage, permission: 'users.manage', enabled: features.users },
   // { path: '/roles', title: 'Роли', Page: RolesPage, superadminOnly: true, enabled: features.roles },
