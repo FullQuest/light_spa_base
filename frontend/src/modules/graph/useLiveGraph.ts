@@ -21,13 +21,14 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
     async function refresh() {
       if (!active || busy) return;
       busy = true;
+      const startedAt = performance.now();
       controller = new AbortController();
-      const timeout = setTimeout(() => controller?.abort(), 15000);
+      const timeout = setTimeout(() => controller?.abort(), 2800);
       try {
-        // Точка подключения бэкенда. at — UTC-момент снимка, НЕ время последней
-        // синхронизации. Для будущего архива сюда передаётся выбранное время,
-        // а периодический опрос в архивном режиме нужно отключить.
-        const data = normalizeSnapshot(await authRequest<unknown>(`/graph?${new URLSearchParams({ at: new Date().toISOString() })}`,
+        // Для живой карты момент снимка задаёт сервер ПОСЛЕ синхронизации.
+        // Это исключает рассинхронизацию часов браузера и сервера. Для будущего
+        // исторического просмотра передаётся фиксированный at и опрос отключается.
+        const data = normalizeSnapshot(await authRequest<unknown>('/graph',
           { signal: controller.signal, cache: 'no-store' }));
         if (!active) return;
         if (!current) {
@@ -71,14 +72,16 @@ export function useLiveGraph(userId: number | undefined, attempt: number) {
         if (active) { setLoaded(current); setError(''); setRefreshError(''); setReceivedAt(new Date().toISOString()); }
       } catch (err) {
         if (active) {
-          const message = err instanceof Error ? err.message : 'Не удалось обновить граф';
+          const message = controller?.signal.aborted ? 'Сервер не ответил за 3 секунды.' : err instanceof Error ? err.message : 'Не удалось обновить граф';
           if (current) setRefreshError(`Обновление недоступно. Показан последний полученный снимок. ${message}`);
           else setError(message);
         }
       } finally {
         clearTimeout(timeout); busy = false;
-        // Следующий запрос только после завершения предыдущего: наложения нет.
-        if (active) timer = setTimeout(() => { if (!document.hidden) void refresh(); }, 5000);
+        // Интервал отсчитывается от начала запроса, обработка не добавляется
+        // к каждой секунде. Долгие запросы не перекрываются и не копятся в очереди.
+        if (active) timer = setTimeout(() => { if (!document.hidden) void refresh(); },
+          Math.max(0, 1000 - (performance.now() - startedAt)));
       }
     }
     const resume = () => { if (!document.hidden) { clearTimeout(timer); void refresh(); } };

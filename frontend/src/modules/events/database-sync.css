@@ -1,0 +1,19 @@
+.database-sync-page { max-width: 980px; margin: 0 auto; }
+.database-sync-heading { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #d7dde3; padding: 8px 0 16px; }
+.database-sync-heading h1 { margin: 0; font-size: 24px; }
+.database-sync-eyebrow { margin: 0 0 4px; color: #64748b; font-size: 11px; font-weight: 700; }
+.database-sync-status { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 16px 0; border-bottom: 1px solid #d7dde3; font-size: 14px; }
+.source-online { color: #166534; }
+.source-offline { color: #9a3412; }
+.database-sync-counts { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 16px; margin: 0; padding: 16px 0; border-bottom: 1px solid #d7dde3; }
+.database-sync-counts div { display: flex; justify-content: space-between; gap: 8px; }
+.database-sync-counts dt { color: #475569; }
+.database-sync-counts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.database-sync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 0; }
+.database-sync-actions button { min-height: 40px; padding: 0 14px; }
+.database-sync-notice { padding: 10px 12px; background: #ecfdf5; border-left: 3px solid #15803d; color: #14532d; }
+.database-sync-error { padding: 10px 12px; background: #fff4df; border-left: 3px solid #b45309; color: #78350f; }
+@media (max-width: 600px) {
+  .database-sync-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .database-sync-actions { align-items: stretch; flex-direction: column; }
+}

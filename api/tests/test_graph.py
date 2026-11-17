@@ -32,7 +32,7 @@ class GraphTests(unittest.TestCase):
         self.session = Session(self.engine)
         self.addCleanup(self.engine.dispose)
         self.addCleanup(self.session.close)
-        for name, value in [('_last_attempt', 0.0), ('_last_success', None), ('_last_result', None), ('_source_status', 'unavailable')]:
+        for name, value in [('_last_attempt', 0.0), ('_last_success', None), ('_last_result', None), ('_source_status', 'unavailable'), ('_source_fingerprint', None)]:
             mock = patch.object(loader, name, value)
             mock.start()
             self.addCleanup(mock.stop)
@@ -92,6 +92,14 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(len(loader.event_archive(self.session)['events']), 5)
         self.assertIsNotNone(self.session.get(InfrastructureSync, 1))
 
+    def test_external_polling_is_shared_and_limited_to_two_seconds(self):
+        with patch.object(loader, '_read_external', return_value=fixture()) as read, \
+                patch.object(loader, 'monotonic', side_effect=[10.0, 11.99, 12.0]):
+            loader.sync_if_due(self.session)
+            loader.sync_if_due(self.session)
+            loader.sync_if_due(self.session)
+        self.assertEqual(read.call_count, 2)
+
     def test_failure_without_cache_reports_unavailable(self):
         with patch.object(loader, '_read_external', side_effect=ConnectionError('offline')):
             loader.sync_if_due(self.session, force=True)
@@ -110,7 +118,7 @@ class GraphAccessTests(ApiTestCase):
     def test_unauthorized_cannot_read_graph_archive_or_loader(self):
         for path, method in [('/api/graph', 'GET'), ('/api/events/archive', 'GET'),
                              ('/api/infra-loader/events', 'GET'), ('/api/infra-loader/fetch-all', 'POST'),
-                             ('/api/infra-loader/delete-all', 'POST')]:
+                             ('/api/infra-loader/delete-all', 'POST'), ('/api/infra-loader/status', 'GET')]:
             self.assertEqual(self.request(path, method=method)[0], 401)
 
     def test_regular_user_cannot_modify_cache(self):
@@ -118,4 +126,5 @@ class GraphAccessTests(ApiTestCase):
         token = self.login('graph-reader@example.test')[1]['access_token']
         for path in ['/api/infra-loader/delete-all', '/api/infra-loader/fetch-all']:
             self.assertEqual(self.request(path, method='POST', token=token)[0], 403)
+        self.assertEqual(self.request('/api/infra-loader/status', token=token)[0], 403)
         self.assertEqual(self.request('/api/graph?at=2026-11-17T10:00:00', token=token)[0], 422)

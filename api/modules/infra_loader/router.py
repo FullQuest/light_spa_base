@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from core.db import get_session
@@ -20,6 +21,15 @@ Superadmin = Annotated[User, Depends(require_roles("superadmin"))]
 def delete_all_endpoint(user: Superadmin, session: Database) -> dict[str, int]:
     """Разрушительно удаляет локальный кэш (только суперадминистратор)."""
     return delete_all(session)
+
+
+@router.get("/status")
+def get_sync_status(user: Superadmin, session: Database) -> dict:
+    return {
+        **sync_metadata(session),
+        "counts": {model.__tablename__: session.exec(select(func.count()).select_from(model)).one()
+                   for model in (Event, EdificeDependency, Edifice, EventStatus)},
+    }
 
 
 @router.post("/fetch-all")

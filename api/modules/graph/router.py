@@ -24,7 +24,7 @@ def read_graph(
 ):
     if at is not None and at.tzinfo is None:
         raise HTTPException(status_code=422, detail="Параметр at должен содержать часовой пояс")
-    # Фронтенд опрашивает граф раз в 5 секунд; обновление общего кэша ограничено тем же интервалом.
+    # Частые клиентские запросы разделяют общий двухсекундный интервал импорта.
     sync_if_due(session)
     metadata = sync_metadata(session)
     object_count = session.exec(select(func.count()).select_from(Edifice)).one()

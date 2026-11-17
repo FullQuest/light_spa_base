@@ -152,3 +152,5 @@
 .infrastructure-node:hover .incident-tooltip { display: block; }
 
 .object-state.affected { background: #ffedd5; color: #9a3412; border: 1px dashed #ea580c; }
+
+.graph-sync.graph-sync-warning { background: #fff4df; border: 1px solid #b45309; color: #78350f; }

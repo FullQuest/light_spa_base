@@ -13,6 +13,7 @@ import { moveRoutes } from './routes';
 import { IncidentClock, IncidentDuration } from './IncidentClock';
 import { incidentImpact } from './incidents';
 import { EventsPanel } from './EventsPanel';
+import { SyncStatus } from './SyncStatus';
 import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from './layout';
 import { ObjectNode, AnnotationProxy, GroupNode, RoutedEdge } from './GraphElements';
 import type { MapEdge } from './GraphElements';
@@ -238,11 +239,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         <button key={value} aria-pressed={mode === value} className={mode === value ? 'btn-primary' : ''} onClick={() => { setMode(value); setSelectedAnnotation(null); setSelectedEdge(null); }}>{title}</button>)}</div>
       <div className="graph-summary"><strong>{visible.length} / {data.objects.length}</strong><span>объектов · {edges.length} связей</span></div>
     </div>
-    <div className="graph-sync" role="status">
-      <span>{data.legacyDemo ? 'Демонстрационные события · подключение БД ещё не выполнено' : data.sourceStatus === 'online' ? 'Источник доступен' : 'Источник недоступен · последний сохранённый снимок'}</span>
-      <span>Снимок: {new Date(data.asOf).toLocaleString('ru-RU')} · Синхронизация: {data.syncedAt ? new Date(data.syncedAt).toLocaleString('ru-RU') : 'нет данных'}</span>
-      <small>Опрос каждые 5 с · Получен: {receivedAt ? new Date(receivedAt).toLocaleTimeString('ru-RU') : '—'}</small>
-    </div>
+    <SyncStatus data={data} receivedAt={receivedAt} />
     {refreshError && <p role="alert">{refreshError}</p>}
     {storageWarning && <p role="alert">{storageWarning}</p>}
     <div className="graph-toolbar">

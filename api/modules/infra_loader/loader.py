@@ -15,7 +15,7 @@ from .models import Edifice, EdificeDependency, Event, EventStatus, Infrastructu
 
 # Внешний PostgreSQL — единственный источник данных, только чтение.
 PG_URL = "postgresql+psycopg2://anon:anon@as.start:5432/main"
-SYNC_INTERVAL_SECONDS = 5
+SYNC_INTERVAL_SECONDS = 2
 SOURCE_TIMEZONE = ZoneInfo("Europe/Moscow")
 RESOURCES = {"water", "energy"}
 
@@ -26,6 +26,7 @@ _last_attempt = 0.0
 _last_success: datetime | None = None
 _last_result: dict[str, int] | None = None
 _source_status = "unavailable"
+_source_fingerprint: str | None = None
 
 
 def _consistent_cache(function):
@@ -42,7 +43,7 @@ def _pg_engine() -> Engine:
     return create_engine(
         PG_URL,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": 4, "options": "-c statement_timeout=5000"},
+        connect_args={"connect_timeout": 1, "options": "-c statement_timeout=1500"},
     )
 
 
@@ -56,10 +57,12 @@ def _read_external() -> tuple[list[dict], list[dict], list[dict], list[dict]]:
             "SELECT id_edifice, name, resource_type, district, street, house_number FROM edifices ORDER BY id_edifice"
         )).mappings()]
         dependencies = [dict(row) for row in connection.execute(text(
-            "SELECT resource_type, id_edifice_dependent, id_edifice_source FROM edifice_dependencies"
+            "SELECT resource_type, id_edifice_dependent, id_edifice_source FROM edifice_dependencies "
+            "ORDER BY id_edifice_source, id_edifice_dependent, resource_type"
         )).mappings()]
         events = [dict(row) for row in connection.execute(text(
-            "SELECT id_event, id_status, id_edifice, resource_type, occurred_at FROM events"
+            "SELECT id_event, id_status, id_edifice, resource_type, occurred_at FROM events "
+            "ORDER BY id_event"
         )).mappings()]
     return statuses, edifices, dependencies, events
 
@@ -144,27 +147,47 @@ def _replace_local(session: Session, data: tuple[list[dict], list[dict], list[di
 @_consistent_cache
 def load_all(session: Session) -> dict[str, int]:
     """Полностью загружает внешний снимок и атомарно заменяет локальный кэш."""
+    global _source_fingerprint
     data = _read_external()
-    return _replace_local(session, data)
+    fingerprint_data = [[
+        [row[key].isoformat() if isinstance(row[key], datetime) else row[key]
+         for key in row]
+        for row in table
+    ] for table in data]
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True).encode()).hexdigest()
+    if fingerprint == _source_fingerprint:
+        sync = session.get(InfrastructureSync, 1)
+        if sync:
+            sync.synced_at = datetime.now(timezone.utc)
+            session.add(sync)
+            session.commit()
+        self_dependencies = sum(1 for row in data[2]
+                                if row["id_edifice_source"] == row["id_edifice_dependent"])
+        return {"unchanged": True, "event_statuses": len(data[0]), "edifices": len(data[1]),
+                "edifice_dependencies": len(data[2]) - self_dependencies,
+                "edifice_dependencies_skipped_self": self_dependencies, "events": len(data[3])}
+    result = _replace_local(session, data)
+    _source_fingerprint = fingerprint
+    return result
 
 
 @_consistent_cache
 def delete_all(session: Session) -> dict[str, int]:
-    global _last_attempt, _last_success, _last_result, _source_status
+    global _last_attempt, _last_success, _last_result, _source_status, _source_fingerprint
     counts = {model.__tablename__: session.exec(select(func.count()).select_from(model)).one()
               for model in _DELETE_ORDER}
     for model in _DELETE_ORDER:
         session.execute(delete(model))
     session.execute(delete(InfrastructureSync))
     session.commit()
-    _last_attempt, _last_success, _last_result, _source_status = 0.0, None, None, "unavailable"
+    _last_attempt, _last_success, _last_result, _source_status, _source_fingerprint = 0.0, None, None, "unavailable", None
     return counts
 
 
 def sync_if_due(session: Session, *, force: bool = False) -> dict[str, int] | None:
     """Обновляет кэш не чаще заданного интервала; сбой оставляет прежний снимок."""
     global _last_attempt, _last_success, _last_result, _source_status
-    if not _sync_lock.acquire(timeout=5):
+    if not _sync_lock.acquire(timeout=1.5):
         return None
     try:
         now = monotonic()
@@ -194,7 +217,8 @@ def sync_if_due(session: Session, *, force: bool = False) -> dict[str, int] | No
 def sync_metadata(session: Session) -> dict[str, str | None]:
     sync = session.get(InfrastructureSync, 1)
     last_success = _last_success or (sync.synced_at.replace(tzinfo=timezone.utc) if sync else None)
-    return {"sourceStatus": _source_status,
+    status = "stale" if _source_status == "unavailable" and last_success else _source_status
+    return {"sourceStatus": status,
             "syncedAt": last_success.isoformat() if last_success else None}
 
 
