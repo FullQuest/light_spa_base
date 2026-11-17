@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 import type { ComponentType } from 'react';
 import type { UserPublic } from '../auth/types';
-import { HomePage } from '../modules/home/HomePage';
+// import { HomePage } from '../modules/home/HomePage';
 const GraphPage = lazy(() => import('../modules/graph/GraphPage').then(module => ({ default: module.GraphPage })));
 const EventArchivePage = lazy(() => import('../modules/events/EventArchivePage').then(module => ({ default: module.EventArchivePage })));
 const DatabaseSyncPage = lazy(() => import('../modules/events/DatabaseSyncPage').then(module => ({ default: module.DatabaseSyncPage })));
