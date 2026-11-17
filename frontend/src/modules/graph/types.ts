@@ -17,7 +17,7 @@ export interface Preferences {
   viewport?: { x: number; y: number; zoom: number };
 }
 export const resourceNames = { water: 'Вода', energy: 'Электроэнергия' };
-export const stateNames = { normal: 'Норма', maintenance: 'Техработы', incident: 'Авария', unknown: 'Нет данных' };
+export const stateNames = { normal: 'Норма', maintenance: 'Ремонтные работы', incident: 'Авария', unknown: 'Нет данных' };
 export const stateIcons = { normal: '✓', maintenance: '◆', incident: '!', unknown: '?' };
 export function objectState(item: InfrastructureObject, resource: Resource | '' = ''): ObjectState {
   const states = resource ? [item.states[resource]] : item.resources.map(r => item.states[r]);

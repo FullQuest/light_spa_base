@@ -10,6 +10,8 @@ import type { InfrastructureObject, ObjectState, Point, Resource } from './types
 import { useLiveGraph } from './useLiveGraph';
 import type { CurrentEvent, LiveGraph } from './snapshot';
 import { moveRoutes } from './routes';
+import { IncidentClock, IncidentDuration } from './IncidentClock';
+import { incidentImpact } from './incidents';
 import { EventsPanel } from './EventsPanel';
 import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from './layout';
 import { ObjectNode, AnnotationProxy, GroupNode, RoutedEdge } from './GraphElements';
@@ -30,7 +32,7 @@ export function GraphPage() {
   const { loaded, error, refreshError, storageWarning, receivedAt } = useLiveGraph(userId, attempt);
   if (error) return <section><p role="alert">{error}</p><button onClick={() => setAttempt(a => a + 1)}>Повторить</button></section>;
   if (!loaded) return <section><p role="status">Загрузка объектов и расчёт схемы…</p></section>;
-  return <Provider store={loaded.store}><ReactFlowProvider><GraphCanvas data={loaded.data} storageWarning={storageWarning} refreshError={refreshError} receivedAt={receivedAt} /></ReactFlowProvider></Provider>;
+  return <Provider store={loaded.store}><ReactFlowProvider><IncidentClock><GraphCanvas data={loaded.data} storageWarning={storageWarning} refreshError={refreshError} receivedAt={receivedAt} /></IncidentClock></ReactFlowProvider></Provider>;
 }
 
 function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data: LiveGraph; storageWarning: string; refreshError: string; receivedAt: string | null }) {
@@ -93,6 +95,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
   const indices = useMemo(() => dependencyIndices(data), [data]);
   const districtFor = useMemo(() => new Map(prefs.groups.flatMap(group => group.members.map(id => [id, group] as const))), [prefs.groups]);
   const collapsedIds = useMemo(() => new Set(prefs.groups.filter(group => group.collapsed).flatMap(group => group.members)), [prefs.groups]);
+  const impact = useMemo(() => incidentImpact(data, data.currentEvents), [data]);
   const activeSources = useMemo(() => data.objects.flatMap(item => item.resources.filter(resource => item.states[resource] === 'incident').map(resource => ({ id: item.id, resource }))), [data]);
   const activeZone = useMemo(() => influenceZone(activeSources, data.dependencies), [activeSources, data.dependencies]);
   const hoveredSources = useMemo(() => {
@@ -126,7 +129,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         zIndex: group.collapsed ? 0 : -1, className: group.collapsed ? 'district-proxy' : 'infrastructure-group' }];
     });
     return [...groups, ...visible.filter(item => !collapsedIds.has(item.id)).map(item => ({ id: item.id, type: 'object', position: position(item.id),
-      data: { item, resource: prefs.filters.resource, highlighted: highlighted.has(item.id), influence: influenceKind(item.id), onHover: setHoveredObject, index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
+      data: { item, incidents: impact.byObject[item.id], affectedCount: impact.counts[item.id], resource: prefs.filters.resource, highlighted: highlighted.has(item.id), influence: influenceKind(item.id), onHover: setHoveredObject, index: indices[item.id].index, dependentCount: indices[item.id].count, districtName: districtFor.get(item.id)?.name },
       width: NODE_WIDTH, height: NODE_HEIGHT, draggable: editing, selectable: false,
       className: highlighted.has(item.id) ? 'graph-selected' : '',
     })), ...prefs.annotations.map(annotation => {
@@ -135,7 +138,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         width: bounds.width, height: bounds.height, style: { width: bounds.width, height: bounds.height, pointerEvents: 'none' as const },
         draggable: false, selectable: false, className: 'annotation-proxy' };
     })].map(node => ({ ...node, measured: measurements[node.id] }));
-  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup, influenceKind]);
+  }, [measurements, prefs, visible, visibleIds, position, highlighted, editing, indices, districtFor, collapsedIds, toggleGroup, influenceKind, impact]);
   const edges = useMemo<MapEdge[]>(() => projectedDependencies(data.dependencies, prefs.groups, visibleIds).filter(edge =>
     !prefs.filters.resource || edge.resource === prefs.filters.resource).map((edge, _index, shown) => {
     const peers = shown.filter(other => other.source === edge.source && other.target === edge.target);
@@ -289,7 +292,12 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         <button disabled={!selectedAnnotation} onClick={() => { dispatch(graphActions.edit({ annotations: prefs.annotations.filter(a => a.id !== selectedAnnotation) })); setSelectedAnnotation(null); }}>Удалить пометку</button>
       </div>}
       {focusedObject && <div className="graph-panel object-details"><h2>{focusedObject.name}</h2><p>{focusedObject.address}</p><p>{focusedObject.description}</p>
-        {focusedObject.resources.map(resource => <div key={resource}><strong>{resourceNames[resource]}</strong><span className={`object-state ${focusedObject.states[resource]}`}>{stateNames[focusedObject.states[resource] ?? 'unknown']}</span></div>)}
+        {focusedObject.resources.map(resource => {
+          const entry = impact.byObject[focusedObject.id]?.[resource];
+          return <div key={resource}><strong>{resourceNames[resource]}</strong><span className={`object-state ${entry?.own ? 'incident' : entry ? 'affected' : focusedObject.states[resource]}`}>{entry?.own ? 'Авария' : entry ? 'Под влиянием аварии' : stateNames[focusedObject.states[resource] ?? 'unknown']}</span>
+            {entry && <><IncidentDuration since={entry.since} /><small>Источники: {entry.origins.map(event => data.objects.find(item => item.id === event.objectId)?.name ?? event.objectId).join(', ')}</small></>}
+          </div>;
+        })}
         <small>Индекс: {indices[focusedObject.id].index} / 10 · Всего зависимых: {indices[focusedObject.id].count}</small><small>ID: {focusedObject.id}</small><small>Прямых зависимых: {data.dependencies.filter(e => e.source === focusedObject.id).length}</small>
       </div>}
     </aside><div className="graph-canvas" ref={canvas} data-testid="graph-canvas">
@@ -318,7 +326,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
           onChange={annotations => dispatch(graphActions.edit({ annotations }))} />
         <Background gap={24} color="#bdc9d9" /><MiniMap ariaLabel="Мини-карта объектов" pannable zoomable nodeColor={node => {
           const item = data.objects.find(item => item.id === node.id);
-          return node.type === 'annotation' ? '#b49ad8' : item ? ({ normal: '#159777', maintenance: '#d99116', incident: '#db4555', unknown: '#94a3b8' })[objectState(item, prefs.filters.resource)] : '#cbd5e1';
+          return node.type === 'annotation' ? '#b49ad8' : item && item.resources.some(r => (!prefs.filters.resource || r === prefs.filters.resource) && impact.byObject[item.id]?.[r] && !impact.byObject[item.id]?.[r]?.own) && objectState(item, prefs.filters.resource) !== 'incident' ? '#ea580c' : item ? ({ normal: '#159777', maintenance: '#d99116', incident: '#db4555', unknown: '#94a3b8' })[objectState(item, prefs.filters.resource)] : '#cbd5e1';
         }} /><Controls showInteractive={false} showZoom={false} showFitView={false} aria-label="Масштаб карты">
           <ControlButton title="Приблизить" aria-label="Приблизить" onClick={() => void flow.zoomIn()}>+</ControlButton>
           <ControlButton title="Отдалить" aria-label="Отдалить" onClick={() => void flow.zoomOut()}>−</ControlButton>
@@ -326,7 +334,7 @@ function GraphCanvas({ data, storageWarning, refreshError, receivedAt }: { data:
         </Controls>
       </ReactFlow>
       {!visible.length && <div className="graph-empty">Нет объектов по выбранным условиям. Измените фильтры или покажите скрытые объекты.</div>}
-      <div className="graph-legend"><span>✓ Норма</span><span>◆ Техработы</span><span>! Авария</span><span>? Нет данных</span><span className="water">━ Вода</span><span className="energy">━ Электроэнергия</span></div>
+      <div className="graph-legend"><span>✓ Норма</span><span>◆ Ремонтные работы</span><span>! Авария</span><span className="affected-legend">↳ Под влиянием аварии</span><span>? Нет данных</span><span className="water">━ Вода</span><span className="energy">━ Электроэнергия</span></div>
     </div><EventsPanel data={data} focused={focusedObject?.id ?? null} resource={eventResource}
       visibleIds={visibleIds} districtNames={new Map([...districtFor].map(([id, group]) => [id, group.name]))} onSelect={selectEvent} /></div>
     <div className="graph-footer">{notice && <span role="status">{notice}</span>}<a href="/licenses/graph.txt" target="_blank" rel="noreferrer">Лицензии</a></div>

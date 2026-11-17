@@ -3,7 +3,7 @@ import ElkWorker from 'elkjs/lib/elk-worker.min.js?worker';
 import type { ElkNode } from 'elkjs/lib/elk-api.js';
 import type { GraphData, Point } from './types';
 export const NODE_WIDTH = 218;
-export const NODE_HEIGHT = 116;
+export const NODE_HEIGHT = 156;
 type Layout = { positions: Record<string, Point>; routes: Record<string, Point[]> };
 const pending = new Map<string, Promise<Layout>>();
 export function layoutGraph(data: GraphData): Promise<Layout> {

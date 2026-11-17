@@ -2,23 +2,42 @@ import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, Handle, Position, useReactFlow } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import type { InfrastructureObject, ObjectState, Point, Resource } from './types';
+import type { ResourceIncident } from './incidents';
+import { IncidentDuration } from './IncidentClock';
 import { roundedPath } from './routes';
 import { objectState, resourceNames, stateIcons, stateNames } from './types';
-export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; influence?: 'active' | 'hover' | null; index: number; dependentCount: number; districtName?: string; onHover?: (id: string | null) => void };
+export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean; influence?: 'active' | 'hover' | null; index: number; dependentCount: number; districtName?: string; incidents?: Partial<Record<Resource, ResourceIncident>>; affectedCount?: number; onHover?: (id: string | null) => void };
 export type MapNode = Node<ObjectNodeData, 'object'>;
 export const ObjectNode = memo(function ObjectNode({ id, data }: NodeProps<MapNode>) {
   const state = objectState(data.item, data.resource);
-  return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''} ${data.influence ? `influence-${data.influence}` : ''}`}
+  const relevantImpact = data.item.resources.filter(r => !data.resource || data.resource === r).some(r => data.incidents?.[r]);
+  const ownIncident = data.item.resources.filter(r => !data.resource || data.resource === r).some(r => data.incidents?.[r]?.own);
+  return <div className={`infrastructure-node ${data.item.kind} ${state} ${data.highlighted ? 'highlighted' : ''} ${data.influence ? `influence-${data.influence}` : ''} ${Object.values(data.incidents ?? {}).some(entry => entry.own) ? 'incident-source' : Object.keys(data.incidents ?? {}).length ? 'incident-affected' : ''}`}
     onMouseEnter={() => data.onHover?.(id)} onMouseLeave={() => data.onHover?.(null)}>
     <Handle type="target" position={Position.Left} id="in" isConnectable={false} />
     <div className="object-meta"><span>{data.item.kind === 'station' ? '◈ Станция' : '▦ Потребитель'}</span><span>{data.districtName ?? 'Без района'}</span></div>
     <strong>{data.item.name}</strong>
-    <div className="resource-badges">{data.item.resources.map(r => <span className={`resource-badge ${r}`} key={r} aria-label={`${resourceNames[r]}: ${stateNames[data.item.states[r] ?? 'unknown']}`} title={`${resourceNames[r]}: ${stateNames[data.item.states[r] ?? 'unknown']}`}>
-      {r === 'water' ? '●' : 'ϟ'} {resourceNames[r]} · {stateNames[data.item.states[r] ?? 'unknown']}</span>)}</div>
-    <div className="object-bottom"><span className={`object-state ${state}`}>{stateIcons[state]} {stateNames[state]}</span><span className="dependency-index" title={`Зависимых объектов: ${data.dependentCount}`} aria-label={`Индекс ${data.index}, зависимых ${data.dependentCount}`}>Индекс {data.index}</span></div>
+    <div className="resource-statuses">{data.item.resources.map(r => {
+      const impact = data.incidents?.[r], own = data.item.states[r] ?? 'unknown';
+      const kind = impact?.own ? 'incident' : impact ? 'affected' : own;
+      const label = kind === 'affected' ? 'Под влиянием аварии' : stateNames[own];
+      return <div key={r} className={`resource-status ${r} ${kind}`} data-resource={r} data-status={kind}>
+        <span className={`resource-badge ${r}`}>{r === 'water' ? '●' : 'ϟ'} {resourceNames[r]}</span>
+        <span className="resource-condition">{kind === 'affected' ? '↳' : stateIcons[own]} {label}</span>
+        {impact && <IncidentDuration since={impact.since} />}
+      </div>;
+    })}</div>
+    {Object.values(data.incidents ?? {}).some(entry => entry.own) && <div className="incident-tooltip" role="tooltip">Под влиянием аварии: {data.affectedCount ?? 0} {dependentNoun(data.affectedCount ?? 0)} (прямые и косвенные).</div>}
+    <div className="object-bottom"><span className={`object-state ${ownIncident ? 'incident' : relevantImpact ? 'affected' : state}`}>{ownIncident ? '! Авария' : relevantImpact ? '↳ Под влиянием' : `${stateIcons[state]} ${stateNames[state]}`}</span><span className="dependency-index" title={`Зависимых объектов: ${data.dependentCount}`} aria-label={`Индекс ${data.index}, зависимых ${data.dependentCount}`}>Индекс {data.index}</span></div>
     <Handle type="source" position={Position.Right} id="out" isConnectable={false} />
   </div>;
 });
+function dependentNoun(count: number) {
+  const lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'зависимых объектов';
+  const last = count % 10;
+  return last === 1 ? 'зависимый объект' : last >= 2 && last <= 4 ? 'зависимых объекта' : 'зависимых объектов';
+}
 export type RoutedEdgeData = { points: Point[]; routeStyle: 'rounded' | 'polyline'; editing: boolean; resource: Resource;
   update: (id: string, points: Point[]) => void; influence?: 'active' | 'hover' | null };
 export type MapEdge = Edge<RoutedEdgeData, 'routed'>;
@@ -36,9 +55,6 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
       <path className={`influence-edge ${data.influence}`} d={path} fill="none" stroke="#e11d48"
         strokeWidth={data.influence === 'active' ? 5 : 3.5} strokeDasharray={data.influence === 'active' ? '9 5' : '5 6'}
         strokeLinecap="round" markerEnd={`url(#influence-arrow-${id})`} pointerEvents="none" /></>}
-    <EdgeLabelRenderer><span className={`edge-resource-label ${data?.resource}`} style={{ transform: `translate(-50%, -50%) translate(${all[Math.floor((all.length - 1) / 2)].x + (all[Math.ceil((all.length - 1) / 2)].x - all[Math.floor((all.length - 1) / 2)].x) / 2}px,${all[Math.floor((all.length - 1) / 2)].y + (all[Math.ceil((all.length - 1) / 2)].y - all[Math.floor((all.length - 1) / 2)].y) / 2}px)`, opacity: style?.opacity }}>
-      {data?.resource && resourceNames[data.resource]} →
-    </span></EdgeLabelRenderer>
     {data?.editing && selected && <EdgeLabelRenderer>
       {shown.map((point, index) => <button key={index} className="route-handle nodrag nopan" aria-label={`Точка маршрута ${index + 1}`}
         title="Перетащите точку. Двойной щелчок — удалить."

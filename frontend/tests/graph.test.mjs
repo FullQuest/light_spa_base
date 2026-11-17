@@ -194,3 +194,35 @@ test('active incidents seed independent resource influence zones', () => {
   assert.equal(objectState(graph.objects[0], 'water'), 'incident');
   assert.equal(objectState(graph.objects[0], 'energy'), 'normal');
 });
+
+import { incidentImpact, formatDuration } from '../src/modules/graph/incidents.ts';
+test('resource impact retains source time, distinguishes own incidents and releases recovered sources', () => {
+  const data = { objects: ['a','b','c','d'].map(id => ({ id, resources: ['water','energy'] })), dependencies: [
+    { id: 'ab', source: 'a', target: 'b', resource: 'water' },
+    { id: 'bc', source: 'b', target: 'c', resource: 'water' },
+    { id: 'bd', source: 'b', target: 'd', resource: 'energy' },
+  ] };
+  const early = { id: '1', objectId: 'a', resource: 'water', status: 'incident', occurredAt: '2026-11-17T10:00:00Z' };
+  const later = { id: '2', objectId: 'b', resource: 'water', status: 'incident', occurredAt: '2026-11-17T11:00:00Z' };
+  const result = incidentImpact(data, [early, later]);
+  assert.equal(result.byObject.a.water.own.id, '1');
+  assert.equal(result.byObject.c.water.own, undefined);
+  assert.equal(result.byObject.c.water.since, early.occurredAt);
+  assert.equal(result.byObject.c.water.origins.length, 2);
+  assert.equal(result.byObject.b.water.since, later.occurredAt, 'own incident uses its own start time');
+  assert.equal(result.byObject.d, undefined);
+  assert.equal(result.byObject.b.energy, undefined);
+  assert.deepEqual(result.counts, { a: 2, b: 1 });
+  const recovered = incidentImpact(data, [{ ...early, status: 'normal' }, later]);
+  assert.equal(recovered.byObject.a, undefined);
+  assert.equal(recovered.byObject.c.water.since, later.occurredAt);
+  assert.deepEqual(incidentImpact(data, []).byObject, {});
+  assert.equal(data.objects[0].states, undefined);
+});
+test('duration handles days, minute rollover, future timestamps and invalid dates', () => {
+  const since = '2026-11-17T10:00:00Z', start = Date.parse(since);
+  assert.equal(formatDuration(since, start + 90061000), '1 д 1 ч 1 мин 1 с');
+  assert.equal(formatDuration(since, start + 60000), '1 мин 0 с');
+  assert.equal(formatDuration(since, start - 1000), '0 с');
+  assert.equal(formatDuration('bad', start), '—');
+});
