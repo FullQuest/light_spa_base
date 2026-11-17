@@ -13,6 +13,7 @@ services:
     expose:
       - "8000"
     restart: unless-stopped
+    container_name: api
 
   frontend:
     image: light-spa-frontend:prod
@@ -22,6 +23,7 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    container_name: frontend
 
   nginx:
     image: nginx:1.28
@@ -33,3 +35,4 @@ services:
       - api
       - frontend
     restart: unless-stopped
+    container_name: nginx
