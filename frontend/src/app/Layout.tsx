@@ -21,7 +21,7 @@ export function Layout() {
   return (
     <div className="dashboard">
       <header className="topbar">
-        <span className="topbar-brand">Light SPA</span>
+        <span className="topbar-brand">Контур управления</span>
         <nav aria-label="Разделы">
           {enabled.filter((module) => module.menu !== false && canOpen(module)).map((module) => (
             <NavLink key={module.path} to={module.path} end>{module.title}</NavLink>
