@@ -12,6 +12,7 @@ from modules.search.router import router as search_router
 from modules.sources.router import router as sources_router
 from modules.sources.scheduler import sources_lifespan
 from modules.requests.router import router as requests_router
+from modules.infra_loader.router import router as infra_loader_router
 
 # Модели новых модулей должны быть импортированы до создания таблиц.
 SQLModel.metadata.create_all(engine)
@@ -28,5 +29,5 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(search_router, prefix="/api")
 app.include_router(sources_router, prefix="/api")
 app.include_router(requests_router, prefix="/api")
+app.include_router(infra_loader_router, prefix="/api")
 # Новые модули подключаются здесь через app.include_router(..., prefix="/api").
-
