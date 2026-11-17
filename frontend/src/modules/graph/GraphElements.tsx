@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, Handle, Position, useReactFlow } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import type { Annotation, InfrastructureObject, Point, Resource } from './types';
+import { roundedPath } from './routes';
 import { objectState, resourceNames, stateIcons, stateNames } from './types';
 export type ObjectNodeData = { item: InfrastructureObject; resource: Resource | ''; highlighted: boolean };
 export type MapNode = Node<ObjectNodeData, 'object'>;
@@ -16,7 +17,7 @@ export const ObjectNode = memo(function ObjectNode({ data }: NodeProps<MapNode>)
     <Handle type="source" position={Position.Right} id="out" isConnectable={false} />
   </div>;
 });
-export type RoutedEdgeData = { points: Point[]; editing: boolean; resource: Resource;
+export type RoutedEdgeData = { points: Point[]; routeStyle: 'rounded' | 'polyline'; editing: boolean; resource: Resource;
   update: (id: string, points: Point[]) => void };
 export type MapEdge = Edge<RoutedEdgeData, 'routed'>;
 export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, style, selected }: EdgeProps<MapEdge>) {
@@ -25,7 +26,7 @@ export function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, data, marke
   const points = data?.points ?? [];
   const shown = points.map((point, index) => drag?.index === index ? drag.point : point);
   const all = [{ x: sourceX, y: sourceY }, ...shown, { x: targetX, y: targetY }];
-  const path = all.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
+  const path = data?.routeStyle === 'rounded' ? roundedPath(all) : all.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
   return <>
     <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 3 : 1.8 }} />
     {data?.editing && selected && <EdgeLabelRenderer>

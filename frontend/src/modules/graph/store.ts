@@ -12,6 +12,11 @@ const slice = createSlice({
       state.past.push(state.present); if (state.past.length > 40) state.past.shift();
       state.present = { ...state.present, ...action.payload }; state.future = [];
     },
+    // Служебное обновление топологии не является действием пользователя.
+    // Старую историю очищаем, чтобы undo не вернул удалённые сервером объекты.
+    reconcile(state, action: PayloadAction<Partial<Preferences>>) {
+      state.present = { ...state.present, ...action.payload }; state.past = []; state.future = [];
+    },
     viewport(state, action: PayloadAction<Preferences['viewport']>) { state.present.viewport = action.payload; },
     undo(state) { const prev = state.past.pop(); if (prev) { state.future.push(state.present); state.present = prev; } },
     redo(state) { const next = state.future.pop(); if (next) { state.past.push(state.present); state.present = next; } },

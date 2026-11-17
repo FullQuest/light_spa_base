@@ -69,3 +69,29 @@
 }
 /* Selected edges are elevated by React Flow; route controls must stay above them. */
 .graph-canvas .react-flow__edgelabel-renderer { z-index: 1001; }
+.graph-workspace { grid-template-columns: 240px minmax(0, 1fr) 285px; }
+.graph-sync { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 14px; font-size: 12px; }
+.graph-sync small { margin-left: auto; font-size: 11px; }
+.graph-events { height: 74vh; min-height: 540px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.graph-events header { padding: 16px; border-bottom: 1px solid var(--border); }
+.graph-events h2 { font-size: 16px; margin-bottom: 8px; }
+.graph-events h2 span { color: var(--accent); }
+.graph-events p, .graph-events small { font-size: 11px; line-height: 1.5; }
+.graph-event-list { overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.graph-event { text-align: left; display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex-shrink: 0; }
+.graph-event strong { font-size: 13px; }
+.graph-event time { color: var(--text); font-size: 11px; }
+.graph-event.selected { background: var(--accent-bg); border: 2px solid var(--accent); padding: 7px 13px; }
+.infrastructure-node.unknown { border-left-color: #94a3b8; }
+.object-state.unknown { background: #edf1f5; color: #52637a; }
+@media (max-width: 1100px) {
+ .graph-workspace { grid-template-columns: 210px minmax(0, 1fr); }
+ .graph-events { grid-column: 1 / -1; height: 300px; min-height: 0; }
+ .graph-event-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+@media (max-width: 620px) {
+ .graph-workspace { grid-template-columns: minmax(0, 1fr); }
+ .graph-events { height: 330px; }
+ .graph-event-list { display: flex; }
+ .graph-sync small { margin-left: 0; }
+}

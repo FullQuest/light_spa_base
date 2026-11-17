@@ -1,5 +1,5 @@
 export type Resource = 'water' | 'energy';
-export type ObjectState = 'normal' | 'maintenance' | 'incident';
+export type ObjectState = 'normal' | 'maintenance' | 'incident' | 'unknown';
 export interface InfrastructureObject {
   id: string; name: string; kind: 'station' | 'consumer'; resources: Resource[];
   states: Partial<Record<Resource, ObjectState>>; district: string; address: string; description: string;
@@ -13,14 +13,15 @@ export interface Preferences {
   positions: Record<string, Point>; routes: Record<string, Point[]>; groups: Group[];
   annotations: Annotation[]; hidden: string[];
   filters: { resource: Resource | ''; state: ObjectState | ''; district: string; incidentsOnly: boolean };
+  routeStyle?: 'rounded' | 'polyline'; manualRouteIds?: string[];
   viewport?: { x: number; y: number; zoom: number };
 }
 export const resourceNames = { water: 'Вода', energy: 'Электроэнергия' };
-export const stateNames = { normal: 'Норма', maintenance: 'Техработы', incident: 'Авария' };
-export const stateIcons = { normal: '✓', maintenance: '◆', incident: '!' };
+export const stateNames = { normal: 'Норма', maintenance: 'Техработы', incident: 'Авария', unknown: 'Нет данных' };
+export const stateIcons = { normal: '✓', maintenance: '◆', incident: '!', unknown: '?' };
 export function objectState(item: InfrastructureObject, resource: Resource | '' = ''): ObjectState {
-  const states = resource ? [item.states[resource]] : Object.values(item.states);
-  return states.includes('incident') ? 'incident' : states.includes('maintenance') ? 'maintenance' : 'normal';
+  const states = resource ? [item.states[resource]] : item.resources.map(r => item.states[r]);
+  return states.includes('incident') ? 'incident' : states.includes('maintenance') ? 'maintenance' : states.length && states.every(state => state === 'normal') ? 'normal' : 'unknown';
 }
 export function descendants(id: string, edges: Dependency[]): Set<string> {
   const adjacency = new Map<string, string[]>();
