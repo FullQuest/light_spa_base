@@ -28,7 +28,7 @@ export function canOpenModule(module: AppModule, user: UserPublic) {
 export const features = { profile: true, users: true, roles: true, documents: true, search: true, sources: true, requests: true };
 
 export const modules: AppModule[] = [
-  { path: '/', title: 'Главная', Page: HomePage },
+  // { path: '/', title: 'Главная', Page: HomePage },
   { path: '/graph', title: 'Схема', Page: GraphPage },
   { path: '/events/archive', title: 'Архив событий', Page: EventArchivePage },
   { path: '/infrastructure/data', title: 'Данные графа', Page: DatabaseSyncPage, superadminOnly: true },
