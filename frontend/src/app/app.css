@@ -2,7 +2,7 @@
 .page-loading > div { max-width: 520px; }
 .page-loading button { margin: 12px 8px 0 0; }
 .dashboard { min-height: 100svh; display: flex; flex-direction: column; }
-.topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; padding: 16px max(24px, calc((100% - 1120px) / 2)); border-bottom: 1px solid var(--border); background: var(--surface); }
+.topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; padding: 16px max(24px, calc((100% - 1320px) / 2)); border-bottom: 1px solid var(--border); background: var(--surface); }
 .topbar-brand { font-weight: 700; color: var(--text-h); white-space: nowrap; }
 .topbar nav { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
 .topbar a { padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; }
