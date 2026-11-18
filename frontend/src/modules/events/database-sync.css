@@ -13,6 +13,15 @@
 .database-sync-actions button { min-height: 40px; padding: 0 14px; }
 .database-sync-notice { padding: 10px 12px; background: #ecfdf5; border-left: 3px solid #15803d; color: #14532d; }
 .database-sync-error { padding: 10px 12px; background: #fff4df; border-left: 3px solid #b45309; color: #78350f; }
+:root[data-theme='dark'] .database-sync-heading,
+:root[data-theme='dark'] .database-sync-status,
+:root[data-theme='dark'] .database-sync-counts { border-color: var(--border); }
+:root[data-theme='dark'] .database-sync-eyebrow,
+:root[data-theme='dark'] .database-sync-counts dt { color: var(--text-muted); }
+:root[data-theme='dark'] .source-online { color: #86efac; }
+:root[data-theme='dark'] .source-offline { color: #fdba74; }
+:root[data-theme='dark'] .database-sync-notice { background: #15362a; color: #bbf7d0; }
+:root[data-theme='dark'] .database-sync-error { background: #422c16; color: #fde68a; }
 @media (max-width: 600px) {
   .database-sync-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .database-sync-actions { align-items: stretch; flex-direction: column; }

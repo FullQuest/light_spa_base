@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formationApi, isMockApi } from '../brigades/api';
+import { formationResetEvent } from '../brigades/events';
 import { calendarDate } from './types';
 import type { Employee } from './types';
 import { filterWorkers, workerColumns } from './model';
@@ -22,6 +23,11 @@ export function WorkersPage() {
     });
     return () => controller.abort();
   }, [attempt]);
+  useEffect(() => {
+    const refresh = () => { setEmployees(null); setError(''); setAttempt(value => value + 1); };
+    window.addEventListener(formationResetEvent, refresh);
+    return () => window.removeEventListener(formationResetEvent, refresh);
+  }, []);
   const columns = useMemo(() => workerColumns(employees ?? []), [employees]);
   const visible = useMemo(() => filterWorkers(employees ?? [], columns, filters, search, sort), [employees, columns, filters, search, sort]);
   const change = (key: string, patch: ColumnFilter) => setFilters(current => ({ ...current, [key]: { ...current[key], ...patch } }));

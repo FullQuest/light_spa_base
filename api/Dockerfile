@@ -7,11 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Сначала зависимости — слой кэшируется, пока не изменится requirements.txt
-COPY requirements.txt .
+COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Затем код
-COPY . .
+COPY api/ .
+COPY algorithm/ ./algorithm/
 
 EXPOSE 8000
 

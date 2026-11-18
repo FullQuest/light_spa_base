@@ -1,6 +1,8 @@
 services:
   api:
-    build: ./api
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////api/data/db.sqlite3}
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}

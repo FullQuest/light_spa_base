@@ -16,9 +16,9 @@ export function workerColumns(employees: Employee[]): WorkerColumn[] {
   const resources = [...new Set(['water', 'energy', ...employees.flatMap(employee => employee.qualifications.map(q => q.resource_type))])];
   return [
     { key: 'tabel', title: 'Табельный № / ID', kind: 'number', value: e => e.tabel },
-    { key: 'last_name', title: 'Фамилия', kind: 'text', value: e => e.last_name },
-    { key: 'first_name', title: 'Имя', kind: 'text', value: e => e.first_name },
-    { key: 'middle_name', title: 'Отчество', kind: 'text', value: e => e.middle_name },
+    { key: 'last_name', title: 'Фамилия', kind: 'text', value: e => e.last_name ?? '' },
+    { key: 'first_name', title: 'Имя', kind: 'text', value: e => e.first_name ?? '' },
+    { key: 'middle_name', title: 'Отчество', kind: 'text', value: e => e.middle_name ?? '' },
     { key: 'start_date_experience', title: 'Начало стажа', kind: 'date', value: e => e.start_date_experience || null },
     { key: 'experience', title: 'Стаж, полных лет', kind: 'number', value: e => experienceYears(e.start_date_experience) },
     ...resources.flatMap(resource => [

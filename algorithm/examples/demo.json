@@ -1,0 +1,19 @@
+{
+  "employees": [
+    {"tabel": 101, "qualifications": {"water": 9.0, "energy": 3.0}},
+    {"tabel": 102, "qualifications": {"water": 8.0}},
+    {"tabel": 103, "qualifications": {"energy": 9.5}},
+    {"tabel": 104, "qualifications": {"water": 4.0, "energy": 8.0}},
+    {"tabel": 105, "qualifications": {"water": 7.0, "energy": 5.0}},
+    {"tabel": 106, "qualifications": {"energy": 7.0}}
+  ],
+  "incidents": [
+    {"event_id": 501, "object_id": 1, "resource": "energy", "base_duration_seconds": 18000},
+    {"event_id": 502, "object_id": 2, "resource": "water", "base_duration_seconds": 14400},
+    {"event_id": 503, "object_id": 3, "resource": "energy", "base_duration_seconds": 7200},
+    {"event_id": 504, "object_id": 4, "resource": "water", "base_duration_seconds": 10800},
+    {"event_id": 505, "object_id": 5, "resource": "energy", "base_duration_seconds": 9000},
+    {"event_id": 506, "object_id": 6, "resource": "water", "base_duration_seconds": 5400}
+  ],
+  "precedences": [[501, 503], [501, 505], [502, 504], [504, 506], [503, 506]]
+}

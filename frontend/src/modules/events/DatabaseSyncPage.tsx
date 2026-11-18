@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HttpError } from '../../shared/http';
 import { authRequest } from '../../auth/api';
-import { invalidateFormationResults } from '../brigades/mockApi';
+import { invalidateFormationResults } from '../brigades/events';
 import './database-sync.css';
 
 interface SyncStatus {
@@ -45,7 +45,7 @@ export function DatabaseSyncPage() {
     try {
       const result = await authRequest<Record<string, number>>('/infra-loader/fetch-all', { method: 'POST' });
       await refreshStatus();
-      setNotice(`Локальная копия обновлена: ${result.edifices ?? 0} объектов, ${result.edifice_dependencies ?? 0} связей, ${result.events ?? 0} событий.`);
+      setNotice(`Локальная копия обновлена: ${result.edifices ?? 0} объектов, ${result.edifice_dependencies ?? 0} связей, ${result.events ?? 0} событий, ${result.employees ?? 0} рабочих, ${result.qualifications ?? 0} квалификаций и ${result.time_resolve ?? 0} базовых времён.`);
     } catch (reason) {
       setError(failureMessage(reason));
       await refreshStatus().catch(() => {});
@@ -53,7 +53,7 @@ export function DatabaseSyncPage() {
   }
 
   async function clearCache() {
-    if (!window.confirm('Удалить текущую локальную копию объектов, связей и событий, а также результат формирования бригад и JSON? Внешняя БД не изменится.')) return;
+    if (!window.confirm('Удалить локальную копию объектов, связей, событий, рабочих, квалификаций и базовых времён, а также результат формирования бригад и JSON? Внешняя БД не изменится.')) return;
     setWorking(true); setError(''); setNotice('');
     try {
       const result = await authRequest<Record<string, number>>('/infra-loader/delete-all', { method: 'POST' });
@@ -79,6 +79,9 @@ export function DatabaseSyncPage() {
       <div><dt>Зависимости</dt><dd>{status.counts.edifice_dependencies ?? 0}</dd></div>
       <div><dt>События</dt><dd>{status.counts.events ?? 0}</dd></div>
       <div><dt>Типы событий</dt><dd>{status.counts.event_statuses ?? 0}</dd></div>
+      <div><dt>Рабочие</dt><dd>{status.counts.employee ?? 0}</dd></div>
+      <div><dt>Квалификации</dt><dd>{status.counts.qualification ?? 0}</dd></div>
+      <div><dt>Базовые времена</dt><dd>{status.counts.time_resolve ?? 0}</dd></div>
     </dl>}
     <div className="database-sync-actions">
       <button type="button" className="btn-primary" onClick={synchronize} disabled={working}>

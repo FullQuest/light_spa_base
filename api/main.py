@@ -14,11 +14,14 @@ from modules.sources.scheduler import sources_lifespan
 from modules.requests.router import router as requests_router
 from modules.infra_loader.router import archive_router as infra_archive_router
 from modules.infra_loader.router import router as infra_loader_router
+from modules.planning.router import router as planning_router
+from modules.planning.service import recover_interrupted
 
 # Модели новых модулей должны быть импортированы до создания таблиц.
 SQLModel.metadata.create_all(engine)
 with Session(engine) as session:
     init_roles(session)
+    recover_interrupted(session)
 init_superadmin()
 
 app = FastAPI(title="Light SPA API", lifespan=sources_lifespan)
@@ -32,4 +35,5 @@ app.include_router(sources_router, prefix="/api")
 app.include_router(requests_router, prefix="/api")
 app.include_router(infra_loader_router, prefix="/api")
 app.include_router(infra_archive_router, prefix="/api")
+app.include_router(planning_router, prefix="/api")
 # Новые модули подключаются здесь через app.include_router(..., prefix="/api").

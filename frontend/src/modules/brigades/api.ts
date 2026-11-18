@@ -3,8 +3,8 @@ import type { Employee } from '../workforce/types';
 import type { FormationJob, FormationResult } from './types';
 import { mockFormationApi } from './mockApi';
 
-// Replace the transport, not the page: the future backend uses this contract.
-export const isMockApi = import.meta.env.VITE_REPAIR_API_MODE !== 'http';
+// HTTP is the default. Mock requires an explicit opt-in.
+export const isMockApi = import.meta.env.VITE_REPAIR_API_MODE === 'mock';
 export const formationApi = isMockApi ? mockFormationApi : {
   employees: (signal?: AbortSignal) => authRequest<Employee[]>('/workforce/employees', { signal, cache: 'no-store' }),
   result: (_scope: string, signal?: AbortSignal) => authRequest<FormationResult | null>('/brigades/result', { signal, cache: 'no-store' }),

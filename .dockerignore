@@ -1,0 +1,8 @@
+*
+!api/
+!api/**
+!algorithm/
+!algorithm/**
+**/__pycache__/
+**/*.pyc
+algorithm/output/

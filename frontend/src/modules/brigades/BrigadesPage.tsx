@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth/auth';
 import { formationApi, isMockApi } from './api';
-import { formationResetEvent } from './mockApi';
+import { formationResetEvent } from './events';
+import { HttpError } from '../../shared/http';
 import { resourceLabel } from '../workforce/types';
 import { dateTime, duration, exportM2, scheduleIssues, scheduleSpanSeconds } from './schedule';
 import type { FormationJob, FormationResult } from './types';
@@ -27,16 +28,30 @@ export function BrigadesPage() {
   const [search, setSearch] = useState('');
   const startRequest = useRef<AbortController | null>(null);
   const loadRequest = useRef<AbortController | null>(null);
+  const runningId = job?.status === 'running' ? job.id : null;
 
   useEffect(() => {
+    if (starting || runningId) return;
     const controller = new AbortController();
     loadRequest.current = controller;
-    Promise.all([formationApi.result(scope, controller.signal), formationApi.currentJob(scope, controller.signal)]).then(([saved, current]) => {
-      if (!controller.signal.aborted) { setResult(current?.status === 'completed' ? current.result ?? saved : saved); setJob(current?.status === 'running' ? current : null); }
-    }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить результат.'); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [scope, attempt]);
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const [saved, current] = await Promise.all([formationApi.result(scope, controller.signal), formationApi.currentJob(scope, controller.signal)]);
+        if (!controller.signal.aborted) {
+          setResult(current?.status === 'completed' ? current.result ?? saved : saved);
+          setJob(current?.status === 'running' ? current : null);
+          if (current?.status === 'failed') setError(current.error || 'Расчёт не выполнен.');
+        }
+      } catch (reason) {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить результат.');
+      } finally {
+        if (!controller.signal.aborted) { setLoading(false); timer = setTimeout(refresh, 3000); }
+      }
+    }
+    void refresh();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [scope, attempt, starting, runningId]);
 
   useEffect(() => {
     function reset() {
@@ -45,6 +60,7 @@ export function BrigadesPage() {
       setResult(null); setJob(null); setStarting(false); setError('');
       setLoading(false);
       setBrigadeFilter(''); setResourceFilter(''); setSearch('');
+      setAttempt(value => value + 1);
       setNotice('Данные очищены. Предыдущий результат и JSON удалены.');
     }
     const storage = (event: StorageEvent) => { if (event.key === 'repair-mock:revision' || event.key === null) reset(); };
@@ -53,7 +69,6 @@ export function BrigadesPage() {
     return () => { window.removeEventListener(formationResetEvent, reset); window.removeEventListener('storage', storage); startRequest.current?.abort(); };
   }, []);
 
-  const runningId = job?.status === 'running' ? job.id : null;
   useEffect(() => {
     if (!runningId) return;
     const controller = new AbortController();
@@ -72,7 +87,10 @@ export function BrigadesPage() {
         } else if (current.status === 'failed') setError(current.error || 'Не удалось сформировать бригады.');
         else timer = setTimeout(poll, 500);
       } catch (reason) {
-        if (!controller.signal.aborted) { setJob(null); setError(reason instanceof Error ? reason.message : 'Не удалось получить результат.'); }
+        if (!controller.signal.aborted) {
+          if (reason instanceof HttpError && reason.status === 404) setResult(null);
+          setJob(null); setError(reason instanceof Error ? reason.message : 'Не удалось получить результат.');
+        }
       }
     }
     timer = setTimeout(poll, 0);
@@ -82,6 +100,7 @@ export function BrigadesPage() {
   async function start() {
     if (startRequest.current && !startRequest.current.signal.aborted || runningId) return;
     const controller = new AbortController(); startRequest.current = controller;
+    loadRequest.current?.abort();
     setStarting(true); setError(''); setNotice('');
     try {
       const current = await formationApi.start(scope, controller.signal);
@@ -99,15 +118,22 @@ export function BrigadesPage() {
   const filteredResult = useMemo(() => result ? { ...result, brigades: result.brigades.filter(b => !brigadeFilter || String(b.brigadeId) === brigadeFilter) } : null, [result, brigadeFilter]);
   const totalDuration = useMemo(() => result ? scheduleSpanSeconds(result.incidents) : null, [result]);
   const working = starting || !!runningId;
-  function download() {
+  async function download() {
     if (!result) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(exportM2(result), null, 2)], { type: 'application/json;charset=utf-8' }));
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'brigades.json'; anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const saved = await formationApi.result(scope);
+      setResult(saved);
+      if (!saved) { setNotice('Исходные данные обновлены или очищены. Сформируйте бригады заново.'); return; }
+      if (scheduleIssues(saved).length) { setError('Сервер вернул некорректное расписание. Сформируйте бригады заново.'); return; }
+      const url = URL.createObjectURL(new Blob([JSON.stringify(exportM2(saved), null, 2)], { type: 'application/json;charset=utf-8' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'brigades.json'; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось скачать JSON.'); }
   }
 
   return <section className="operations-page brigades-page"><header className="operations-heading"><div><p className="operations-eyebrow">ПЛАНИРОВАНИЕ РЕМОНТА</p><h1>Формирование бригад</h1><p>Распределение специалистов и последовательность ликвидации аварий</p></div><div className="operations-actions"><button className="btn-primary" onClick={start} disabled={working || loading}>{working ? 'Формирование…' : result ? 'Сформировать заново' : 'Сформировать бригады'}</button><button onClick={download} disabled={!result || working || !!issues.length}>↓ Скачать JSON</button></div></header>
     {isMockApi && <p className="operations-demo">Демонстрационный расчёт · результат иллюстрирует интерфейс и не является оптимальным решением</p>}
+    {result?.conflictModel === 'zero' && <p className="operations-note">Расписание рассчитано без учёта конфликтов между рабочими: коэффициенты конфликтности пока равны нулю.</p>}
     <div className="formation-control"><div><strong>{working ? job?.stage ?? 'Запуск расчёта' : result ? 'Последний успешный результат' : 'Готово к формированию'}</strong><p>{working ? 'Ожидаем результат. Расчёт может занять до 180 секунд.' : result ? `Сформирован ${dateTime(result.generatedAt)} · время МСК` : 'Запустите расчёт, чтобы получить составы бригад, расписание и файл M2.'}</p></div>
       {working && <div className="formation-progress"><progress aria-label="Прогресс формирования бригад" max={100} value={job?.progress ?? undefined} /><span>{job?.progress == null ? 'Выполняется…' : `${job.progress}%`}</span></div>}
     </div>

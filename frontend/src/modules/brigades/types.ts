@@ -21,6 +21,7 @@ export interface FormationResult {
   employees: Employee[];
   brigades: Brigade[];
   incidents: ScheduledIncident[];
+  conflictModel?: 'zero';
 }
 export interface FormationJob {
   id: string;

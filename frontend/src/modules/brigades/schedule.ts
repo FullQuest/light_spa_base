@@ -72,7 +72,7 @@ export function scheduleIssues(result: FormationResult): string[] {
     for (const item of ordered) {
       if (!Number.isInteger(item.sequence) || item.sequence < 1 || sequences.has(item.sequence)) issues.add(`У бригады №${brigade.brigadeId} некорректная нумерация порядка работ.`);
       sequences.add(item.sequence);
-      if (!brigade.employeeIds.some(id => result.employees.find(e => e.tabel === id)?.qualifications.some(q => q.resource_type === item.resourceType && q.proff > 0))) issues.add(`У бригады №${brigade.brigadeId} нет квалификации для события №${item.eventId}.`);
+      if (!brigade.employeeIds.some(id => result.employees.find(e => e.tabel === id)?.qualifications.some(q => q.resource_type === item.resourceType && (q.proff ?? 0) > 0))) issues.add(`У бригады №${brigade.brigadeId} нет квалификации для события №${item.eventId}.`);
     }
     for (let index = 1; index < ordered.length; index++) {
       if (Date.parse(ordered[index].startAt) < Date.parse(ordered[index - 1].finishAt)) issues.add(`У бригады №${brigade.brigadeId} пересекаются работы или нарушен их порядок.`);

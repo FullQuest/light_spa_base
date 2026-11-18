@@ -13,13 +13,15 @@ from modules.infra_loader.models import Edifice, Event, InfrastructureSync
 
 
 def fixture():
-    return (
+    old = (
         [dict(id_status=1, name='Активная авария'), dict(id_status=2, name='Ремонтные работы'), dict(id_status=3, name='Норма')],
         [dict(id_edifice=i, name=f'Объект {i}', resource_type=['water', 'energy'], district='Район', street='Мира', house_number=str(i)) for i in (1, 2, 3)],
         [dict(resource_type='water', id_edifice_source=1, id_edifice_dependent=2), dict(resource_type='water', id_edifice_source=2, id_edifice_dependent=3)],
         [dict(id_event=i, id_status=status, id_edifice=1, resource_type=resource, occurred_at=datetime(2026, 11, 16, hour))
          for i, status, resource, hour in [(1, 3, 'water', 10), (2, 1, 'water', 11), (3, 2, 'energy', 11), (4, 3, 'water', 12), (5, 1, 'water', 12)]],
     )
+    return dict(zip(('statuses', 'edifices', 'dependencies', 'events'), old),
+                time_resolves=[], employees=[], qualifications=[])
 
 
 class GraphTests(unittest.TestCase):
@@ -32,7 +34,7 @@ class GraphTests(unittest.TestCase):
         self.session = Session(self.engine)
         self.addCleanup(self.engine.dispose)
         self.addCleanup(self.session.close)
-        for name, value in [('_last_attempt', 0.0), ('_last_success', None), ('_last_result', None), ('_source_status', 'unavailable'), ('_source_fingerprint', None)]:
+        for name, value in [('_last_attempt', 0.0), ('_last_success', None), ('_last_result', None), ('_source_status', 'unavailable')]:
             mock = patch.object(loader, name, value)
             mock.start()
             self.addCleanup(mock.stop)
@@ -64,8 +66,8 @@ class GraphTests(unittest.TestCase):
     def test_invalid_cycle_or_resource_leaves_cache_intact(self):
         self.seed()
         cycle, bad_resource = deepcopy(fixture()), deepcopy(fixture())
-        cycle[2].append(dict(resource_type='water', id_edifice_source=3, id_edifice_dependent=1))
-        bad_resource[2][0]['resource_type'] = 'gas'
+        cycle['dependencies'].append(dict(resource_type='water', id_edifice_source=3, id_edifice_dependent=1))
+        bad_resource['dependencies'][0]['resource_type'] = 'gas'
         for data in [cycle, bad_resource]:
             with self.assertRaises(ValueError):
                 loader._replace_local(self.session, data)
@@ -75,7 +77,7 @@ class GraphTests(unittest.TestCase):
     def test_duplicate_event_rolls_back_entire_replacement(self):
         self.seed()
         data = deepcopy(fixture())
-        data[3].append(data[3][0])
+        data['events'].append(data['events'][0])
         with self.assertRaises(Exception):
             loader._replace_local(self.session, data)
         self.assertEqual(len(self.session.exec(select(Event)).all()), 5)

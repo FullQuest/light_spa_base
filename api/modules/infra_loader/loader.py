@@ -1,15 +1,16 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
 import hashlib
 import json
 import logging
+import math
 from threading import RLock
 from time import monotonic
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import create_engine, delete, func, text
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, select, SQLModel
+from sqlmodel import Session, select
 
 from .models import (
     Edifice,
@@ -21,6 +22,7 @@ from .models import (
     Qualification,
     TimeResolve,
 )
+from modules.planning.models import PlanningData, invalidate_plans
 
 PG_URL = "postgresql+psycopg2://anon:anon@as.start:5432/main"
 SYNC_INTERVAL_SECONDS = 2
@@ -42,7 +44,6 @@ _last_attempt = 0.0
 _last_success: datetime | None = None
 _last_result: dict[str, int] | None = None
 _source_status = "unavailable"
-_schema_ready = False
 
 
 def _consistent_cache(function):
@@ -60,18 +61,6 @@ def _pg_engine() -> Engine:
         pool_pre_ping=True,
         connect_args={"connect_timeout": 1, "options": "-c statement_timeout=3000"},
     )
-
-
-def _ensure_schema(session: Session) -> None:
-    """Один раз за процесс пересоздаёт qualification, чтобы снять устаревший
-    UNIQUE-индекс на resource_type, оставшийся от старой схемы SQLite."""
-    global _schema_ready
-    if _schema_ready:
-        return
-    session.execute(text("DROP TABLE IF EXISTS qualification"))
-    SQLModel.metadata.create_all(session.connection(), checkfirst=True)
-    session.commit()
-    _schema_ready = True
 
 
 def _read_external():
@@ -114,8 +103,55 @@ def _read_external():
     }
 
 
+def _validate_external(data: dict) -> int:
+    statuses, edifices = data["statuses"], data["edifices"]
+    status_names = {row["id_status"]: row["name"] for row in statuses}
+    resources = {row["id_edifice"]: set(row["resource_type"] or []) for row in edifices}
+    if len(resources) != len(edifices) or any(not values or not values <= RESOURCES for values in resources.values()):
+        raise ValueError("Некорректные ID объектов или ресурсы")
+    adjacency, degree = {key: [] for key in resources}, dict.fromkeys(resources, 0)
+    for row in data["dependencies"]:
+        source, target, resource = row["id_edifice_source"], row["id_edifice_dependent"], row["resource_type"]
+        if resource not in resources.get(source, set()) or resource not in resources.get(target, set()):
+            raise ValueError("Некорректная зависимость объектов")
+        if source != target:
+            adjacency[source].append(target)
+            degree[target] += 1
+    queue = [key for key, value in degree.items() if value == 0]
+    for source in queue:
+        for target in adjacency[source]:
+            degree[target] -= 1
+            if degree[target] == 0:
+                queue.append(target)
+    if len(queue) != len(resources):
+        raise ValueError("Топология внешней БД содержит цикл")
+    for row in data["events"]:
+        if row["resource_type"] not in resources.get(row["id_edifice"], set()) or row["id_status"] not in status_names:
+            raise ValueError("Некорректное событие")
+        status_category(status_names[row["id_status"]])
+    workers = {row["tabel"] for row in data["employees"]}
+    for row in data["qualifications"]:
+        value = row["proff"]
+        if row["id_employee"] not in workers or row["resource_type"] not in RESOURCES or (value is not None and (not math.isfinite(value) or not .1 <= value <= 10)):
+            raise ValueError("Некорректная квалификация рабочего")
+    for row in data["time_resolves"]:
+        if row["resource_type"] not in resources.get(row["id_edifice"], set()):
+            raise ValueError("Некорректное базовое время объекта")
+    return sum(row["id_edifice_source"] == row["id_edifice_dependent"] for row in data["dependencies"])
+
+
+def _fingerprint_value(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    raise TypeError(type(value).__name__)
+
+
 def _replace_local(session: Session, data: dict) -> dict[str, int]:
-    _ensure_schema(session)
+    skipped_self = _validate_external(data)
+    data = {**data, "dependencies": [row for row in data["dependencies"] if row["id_edifice_source"] != row["id_edifice_dependent"]]}
+    fingerprint = hashlib.sha256(json.dumps(data, sort_keys=True, default=_fingerprint_value).encode()).hexdigest()
     try:
         for model in _DELETE_ORDER:
             session.execute(delete(model))
@@ -128,6 +164,9 @@ def _replace_local(session: Session, data: dict) -> dict[str, int]:
         session.add_all(Employee.model_validate(row) for row in data["employees"])
         session.flush()
         session.add_all(Qualification.model_validate(row) for row in data["qualifications"])
+        state = session.get(PlanningData, 1)
+        if state is None or state.fingerprint != fingerprint:
+            invalidate_plans(session, fingerprint)
         sync = session.get(InfrastructureSync, 1) or InfrastructureSync(synced_at=datetime.now(timezone.utc))
         sync.synced_at = datetime.now(timezone.utc)
         session.add(sync)
@@ -139,6 +178,7 @@ def _replace_local(session: Session, data: dict) -> dict[str, int]:
         "event_statuses": len(data["statuses"]),
         "edifices": len(data["edifices"]),
         "edifice_dependencies": len(data["dependencies"]),
+        "edifice_dependencies_skipped_self": skipped_self,
         "events": len(data["events"]),
         "time_resolve": len(data["time_resolves"]),
         "employees": len(data["employees"]),
@@ -161,6 +201,7 @@ def delete_all(session: Session) -> dict[str, int]:
     for model in _DELETE_ORDER:
         session.execute(delete(model))
     session.execute(delete(InfrastructureSync))
+    invalidate_plans(session)
     session.commit()
     _last_attempt, _last_success, _last_result, _source_status = 0.0, None, None, "unavailable"
     return counts
