@@ -9,28 +9,43 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import create_engine, delete, func, text
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, select
+from sqlmodel import Session, select, SQLModel
 
-from .models import Edifice, EdificeDependency, Event, EventStatus, InfrastructureSync
+from .models import (
+    Edifice,
+    EdificeDependency,
+    Employee,
+    Event,
+    EventStatus,
+    InfrastructureSync,
+    Qualification,
+    TimeResolve,
+)
 
-# Внешний PostgreSQL — единственный источник данных, только чтение.
 PG_URL = "postgresql+psycopg2://anon:anon@as.start:5432/main"
 SYNC_INTERVAL_SECONDS = 2
 SOURCE_TIMEZONE = ZoneInfo("Europe/Moscow")
 RESOURCES = {"water", "energy"}
 
 logger = logging.getLogger(__name__)
-_DELETE_ORDER = (Event, EdificeDependency, Edifice, EventStatus)
+_DELETE_ORDER = (
+    Event,
+    EdificeDependency,
+    TimeResolve,
+    Qualification,
+    Employee,
+    Edifice,
+    EventStatus,
+)
 _sync_lock = RLock()
 _last_attempt = 0.0
 _last_success: datetime | None = None
 _last_result: dict[str, int] | None = None
 _source_status = "unavailable"
-_source_fingerprint: str | None = None
+_schema_ready = False
 
 
 def _consistent_cache(function):
-    # Импорт и чтение полного снимка не перемежаются в одном процессе API.
     @wraps(function)
     def wrapped(*args, **kwargs):
         with _sync_lock:
@@ -43,91 +58,76 @@ def _pg_engine() -> Engine:
     return create_engine(
         PG_URL,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": 1, "options": "-c statement_timeout=1500"},
+        connect_args={"connect_timeout": 1, "options": "-c statement_timeout=3000"},
     )
 
 
-def _read_external() -> tuple[list[dict], list[dict], list[dict], list[dict]]:
-    # Все четыре таблицы читаем из одного согласованного снимка PostgreSQL.
+def _ensure_schema(session: Session) -> None:
+    """Один раз за процесс пересоздаёт qualification, чтобы снять устаревший
+    UNIQUE-индекс на resource_type, оставшийся от старой схемы SQLite."""
+    global _schema_ready
+    if _schema_ready:
+        return
+    session.execute(text("DROP TABLE IF EXISTS qualification"))
+    SQLModel.metadata.create_all(session.connection(), checkfirst=True)
+    session.commit()
+    _schema_ready = True
+
+
+def _read_external():
     with _pg_engine().connect().execution_options(isolation_level="REPEATABLE READ") as connection, connection.begin():
         statuses = [dict(row) for row in connection.execute(text(
             "SELECT id_status, name FROM event_statuses ORDER BY id_status"
         )).mappings()]
         edifices = [dict(row) for row in connection.execute(text(
-            "SELECT id_edifice, name, resource_type, district, street, house_number FROM edifices ORDER BY id_edifice"
+            "SELECT id_edifice, name, resource_type, district, street, house_number "
+            "FROM edifices ORDER BY id_edifice"
         )).mappings()]
         dependencies = [dict(row) for row in connection.execute(text(
-            "SELECT resource_type, id_edifice_dependent, id_edifice_source FROM edifice_dependencies "
-            "ORDER BY id_edifice_source, id_edifice_dependent, resource_type"
+            "SELECT resource_type, id_edifice_dependent, id_edifice_source "
+            "FROM edifice_dependencies ORDER BY id_edifice_source, id_edifice_dependent, resource_type"
         )).mappings()]
         events = [dict(row) for row in connection.execute(text(
-            "SELECT id_event, id_status, id_edifice, resource_type, occurred_at FROM events "
-            "ORDER BY id_event"
+            "SELECT id_event, id_status, id_edifice, resource_type, occurred_at "
+            "FROM events ORDER BY id_event"
         )).mappings()]
-    return statuses, edifices, dependencies, events
+        time_resolves = [dict(row) for row in connection.execute(text(
+            "SELECT id_time, resource_type, avg_resolution_time, id_edifice "
+            "FROM time_resolve ORDER BY id_time"
+        )).mappings()]
+        employees = [dict(row) for row in connection.execute(text(
+            "SELECT tabel::int AS tabel, first_name, last_name, middle_name, start_date_experience "
+            "FROM employee ORDER BY tabel"
+        )).mappings()]
+        qualifications = [dict(row) for row in connection.execute(text(
+            "SELECT id_qualification, id_employee::int AS id_employee, resource_type, proff::float8 AS proff "
+            "FROM qualification ORDER BY id_qualification"
+        )).mappings()]
+    return {
+        "statuses": statuses,
+        "edifices": edifices,
+        "dependencies": dependencies,
+        "events": events,
+        "time_resolves": time_resolves,
+        "employees": employees,
+        "qualifications": qualifications,
+    }
 
 
-def _validate_external(data: tuple[list[dict], list[dict], list[dict], list[dict]]) -> int:
-    statuses, edifices, dependencies, events = data
-    status_names = {row["id_status"]: row["name"] for row in statuses}
-    edifice_ids = {row["id_edifice"] for row in edifices}
-    resources_by_id = {row["id_edifice"]: set(row["resource_type"] or []) for row in edifices}
-    if len(edifice_ids) != len(edifices):
-        raise ValueError("Внешняя БД вернула повторяющиеся ID объектов")
-    for resources in resources_by_id.values():
-        if not resources or not resources <= RESOURCES:
-            raise ValueError("Внешняя БД содержит неподдерживаемые типы ресурсов")
-
-    adjacency = {edifice_id: [] for edifice_id in edifice_ids}
-    indegree = dict.fromkeys(edifice_ids, 0)
-    for edge in dependencies:
-        source, target, resource = edge["id_edifice_source"], edge["id_edifice_dependent"], edge["resource_type"]
-        if source not in edifice_ids or target not in edifice_ids or resource not in RESOURCES:
-            raise ValueError("Внешняя БД вернула некорректную зависимость")
-        if resource not in resources_by_id[source] or resource not in resources_by_id[target]:
-            raise ValueError("Ресурс зависимости отсутствует у связанного объекта")
-        if source != target:
-            adjacency[source].append(target)
-            indegree[target] += 1
-
-    queue = [edifice_id for edifice_id, degree in indegree.items() if degree == 0]
-    visited = 0
-    for source in queue:
-        visited += 1
-        for target in adjacency[source]:
-            indegree[target] -= 1
-            if indegree[target] == 0:
-                queue.append(target)
-    if visited != len(edifice_ids):
-        raise ValueError("Топология внешней БД содержит цикл")
-
-    for event in events:
-        if (event["id_edifice"] not in edifice_ids or event["resource_type"] not in RESOURCES or
-                event["resource_type"] not in resources_by_id[event["id_edifice"]] or
-                event["id_status"] not in status_names):
-            raise ValueError("Внешняя БД вернула некорректное событие")
-        status_category(status_names[event["id_status"]])
-    return sum(1 for edge in dependencies if edge["id_edifice_source"] == edge["id_edifice_dependent"])
-
-
-def _replace_local(session: Session, data: tuple[list[dict], list[dict], list[dict], list[dict]]) -> dict[str, int]:
-    statuses, edifices, dependencies, events = data
-    skipped_self = _validate_external(data)
-    prepared_dependencies = [row for row in dependencies
-                             if row["id_edifice_source"] != row["id_edifice_dependent"]]
-    # Проверяем обязательные поля до любых изменений локальной копии.
-    prepared_statuses = [EventStatus.model_validate(row) for row in statuses]
-    prepared_edifices = [Edifice.model_validate(row) for row in edifices]
-    prepared_edges = [EdificeDependency.model_validate(row) for row in prepared_dependencies]
-    prepared_events = [Event.model_validate(row) for row in events]
+def _replace_local(session: Session, data: dict) -> dict[str, int]:
+    _ensure_schema(session)
     try:
         for model in _DELETE_ORDER:
             session.execute(delete(model))
-        session.add_all(prepared_statuses)
-        session.add_all(prepared_edifices)
+        session.add_all(EventStatus.model_validate(row) for row in data["statuses"])
+        session.add_all(Edifice.model_validate(row) for row in data["edifices"])
         session.flush()
-        session.add_all(prepared_edges)
-        session.add_all(prepared_events)
+        session.add_all(EdificeDependency.model_validate(row) for row in data["dependencies"])
+        session.add_all(Event.model_validate(row) for row in data["events"])
+        session.add_all(TimeResolve.model_validate(row) for row in data["time_resolves"])
+        session.add_all(Employee.model_validate(row) for row in data["employees"])
+        session.flush()
+        session.add_all(Qualification.model_validate(row) for row in data["qualifications"])
         sync = session.get(InfrastructureSync, 1) or InfrastructureSync(synced_at=datetime.now(timezone.utc))
         sync.synced_at = datetime.now(timezone.utc)
         session.add(sync)
@@ -136,56 +136,38 @@ def _replace_local(session: Session, data: tuple[list[dict], list[dict], list[di
         session.rollback()
         raise
     return {
-        "event_statuses": len(statuses),
-        "edifices": len(edifices),
-        "edifice_dependencies": len(prepared_dependencies),
-        "edifice_dependencies_skipped_self": skipped_self,
-        "events": len(events),
+        "event_statuses": len(data["statuses"]),
+        "edifices": len(data["edifices"]),
+        "edifice_dependencies": len(data["dependencies"]),
+        "events": len(data["events"]),
+        "time_resolve": len(data["time_resolves"]),
+        "employees": len(data["employees"]),
+        "qualifications": len(data["qualifications"]),
     }
 
 
 @_consistent_cache
 def load_all(session: Session) -> dict[str, int]:
-    """Полностью загружает внешний снимок и атомарно заменяет локальный кэш."""
-    global _source_fingerprint
+    """Полностью копирует внешний снимок в локальную БД."""
     data = _read_external()
-    fingerprint_data = [[
-        [row[key].isoformat() if isinstance(row[key], datetime) else row[key]
-         for key in row]
-        for row in table
-    ] for table in data]
-    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True).encode()).hexdigest()
-    if fingerprint == _source_fingerprint:
-        sync = session.get(InfrastructureSync, 1)
-        if sync:
-            sync.synced_at = datetime.now(timezone.utc)
-            session.add(sync)
-            session.commit()
-        self_dependencies = sum(1 for row in data[2]
-                                if row["id_edifice_source"] == row["id_edifice_dependent"])
-        return {"unchanged": True, "event_statuses": len(data[0]), "edifices": len(data[1]),
-                "edifice_dependencies": len(data[2]) - self_dependencies,
-                "edifice_dependencies_skipped_self": self_dependencies, "events": len(data[3])}
-    result = _replace_local(session, data)
-    _source_fingerprint = fingerprint
-    return result
+    return _replace_local(session, data)
 
 
 @_consistent_cache
 def delete_all(session: Session) -> dict[str, int]:
-    global _last_attempt, _last_success, _last_result, _source_status, _source_fingerprint
+    global _last_attempt, _last_success, _last_result, _source_status
     counts = {model.__tablename__: session.exec(select(func.count()).select_from(model)).one()
               for model in _DELETE_ORDER}
     for model in _DELETE_ORDER:
         session.execute(delete(model))
     session.execute(delete(InfrastructureSync))
     session.commit()
-    _last_attempt, _last_success, _last_result, _source_status, _source_fingerprint = 0.0, None, None, "unavailable", None
+    _last_attempt, _last_success, _last_result, _source_status = 0.0, None, None, "unavailable"
     return counts
 
 
 def sync_if_due(session: Session, *, force: bool = False) -> dict[str, int] | None:
-    """Обновляет кэш не чаще заданного интервала; сбой оставляет прежний снимок."""
+    """Копирует данные из PostgreSQL не чаще заданного интервала."""
     global _last_attempt, _last_success, _last_result, _source_status
     if not _sync_lock.acquire(timeout=1.5):
         return None
@@ -218,8 +200,10 @@ def sync_metadata(session: Session) -> dict[str, str | None]:
     sync = session.get(InfrastructureSync, 1)
     last_success = _last_success or (sync.synced_at.replace(tzinfo=timezone.utc) if sync else None)
     status = "stale" if _source_status == "unavailable" and last_success else _source_status
-    return {"sourceStatus": status,
-            "syncedAt": last_success.isoformat() if last_success else None}
+    return {
+        "sourceStatus": status,
+        "syncedAt": last_success.isoformat() if last_success else None,
+    }
 
 
 def status_category(name: str) -> str:
@@ -240,7 +224,6 @@ def resource_name(value: str) -> str:
 
 
 def event_time(value: datetime) -> str:
-    # В исходной БД timestamp хранится как местное московское время без offset.
     aware = value.replace(tzinfo=SOURCE_TIMEZONE) if value.tzinfo is None else value
     return aware.isoformat()
 
