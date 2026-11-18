@@ -76,7 +76,7 @@ def random_conflicts(employee_ids: tuple[int, ...], rng: random.Random):
     values = [[0.0] * size for _ in range(size)]
     for i in range(size):
         for j in range(i + 1, size):
-            value = rng.uniform(0, 0.9)
+            value = rng.choice((0, 0, 0, 0, 0, 0.9))
             values[i][j] = values[j][i] = value
     return ConflictMatrix(employee_ids, tuple(tuple(row) for row in values))
 
