@@ -2,8 +2,13 @@ logs
 *.log
 
 notes.md
+req.md
 rsp.md
 unp.py
+
+
+docker-cleanup.bash
+docker-nuke.bash
 
 .vscode/*
 !.vscode/extensions.json
