@@ -4,7 +4,7 @@ from threading import Thread
 
 from sqlmodel import Session, select
 
-from algorithm.models import Solution
+from algorithm.models import EMBEDDED_EMPLOYEE_IDS, Solution
 from algorithm.solver import evaluate, evaluation_report
 from core.db import engine
 from modules.infra_loader.loader import _consistent_cache
@@ -62,10 +62,13 @@ def update(job_id: str, revision: str, db_engine, **values) -> bool:
 
 
 def build_result(snapshot: PlanningInput, job_id: str, m2: dict | None) -> dict:
+    conflict_model = "zero"
     if m2 is None:
         brigades, incidents = [], []
     else:
         problem = validated_problem(snapshot)
+        if {employee.tabel for employee in problem.employees} == set(EMBEDDED_EMPLOYEE_IDS):
+            conflict_model = "embedded"
         solution = Solution.from_dict(m2)
         # Re-evaluate the output. Never trust schedule/IDs from an arbitrary solver.
         report = evaluation_report(problem, solution, evaluate(problem, solution))
@@ -79,7 +82,7 @@ def build_result(snapshot: PlanningInput, job_id: str, m2: dict | None) -> dict:
                       "brigadeId": row["brigade_id"], "sequence": row["sequence"]} for row in report["schedule"]]
     return {"id": job_id, "generatedAt": datetime.now(timezone.utc).isoformat(),
             "dataRevision": snapshot.revision, "employees": snapshot.employees,
-            "brigades": brigades, "incidents": incidents, "conflictModel": "zero"}
+            "brigades": brigades, "incidents": incidents, "conflictModel": conflict_model}
 
 
 def run_job(job_id: str, snapshot: PlanningInput, db_engine=engine) -> None:

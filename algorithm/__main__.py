@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 
 from .input import ROOT, load_backup, load_conflicts, load_problem
-from .models import ConflictMatrix, Solution
-from .solver import evaluation_report, evaluate, optimize
+from .models import EMBEDDED_EMPLOYEE_IDS, ConflictMatrix, Solution
+from .solver import DEFAULT_TIME_LIMIT_SECONDS, evaluation_report, evaluate, optimize
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -19,20 +19,21 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Standalone M2 brigade/schedule optimizer (zero conflicts by default).")
+    parser = argparse.ArgumentParser(description="Standalone M2 brigade/schedule optimizer.")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--input", type=Path, help="Normalized problem JSON")
     source.add_argument("--backup", type=Path, help="PostgreSQL custom archive or plain COPY dump; default: backup.sql")
     parser.add_argument("--active-status-id", type=int, action="append", help="Active dump status ID; repeat for multiple IDs")
-    parser.add_argument("--conflicts", type=Path, help="Optional employee_ids/values JSON; default is a hardcoded zero matrix")
+    parser.add_argument("--conflicts", type=Path, help="Optional employee_ids/values JSON; default is the embedded platform matrix")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--baseline", type=Path, help="Valid M2 incumbent; search never returns a worse makespan")
     mode.add_argument("--evaluate", type=Path, help="Only validate/evaluate this M2 file, without optimization")
     parser.add_argument("--output", type=Path, default=ROOT / "algorithm/output/brigades.json")
     parser.add_argument("--report", type=Path, help="Write diagnostics/schedule separately from the strict M2 output")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--iterations", type=int, default=100_000)
-    parser.add_argument("--time-limit", type=float, default=60, help="Search budget in seconds, 0.001..170; default: 60")
+    parser.add_argument("--iterations", type=int, help="Optional search step cap; default: use the full time budget")
+    parser.add_argument("--time-limit", type=float, default=DEFAULT_TIME_LIMIT_SECONDS,
+                        help=f"Search budget in seconds, 0.001..170; default: {DEFAULT_TIME_LIMIT_SECONDS}")
     args = parser.parse_args()
     try:
         if args.input and args.active_status_id:
@@ -57,11 +58,14 @@ def main() -> int:
                               iterations=args.iterations, time_limit_seconds=args.time_limit)
             report = evaluation_report(problem, result.solution, result.evaluation, conflicts)
             report.update({
-                "algorithm": "multi_start_simulated_annealing", "optimality_proven": False,
-                "conflict_model": "provided_matrix" if args.conflicts else "hardcoded_zero_matrix",
+                "algorithm": "hybrid_branch_and_bound_local_search", "optimality_proven": result.optimality_proven,
+                "conflict_model": ("provided_matrix" if args.conflicts else
+                                   "embedded_matrix" if {e.tabel for e in problem.employees} == set(EMBEDDED_EMPLOYEE_IDS)
+                                   else "zero_fallback"),
                 "lower_bound_seconds": result.lower_bound_seconds,
                 "gap_to_lower_bound_percent": max(0, (result.evaluation.makespan_seconds / result.lower_bound_seconds - 1) * 100),
                 "evaluated_candidates": result.evaluated_candidates, "iterations": result.iterations,
+                "exact_nodes": result.exact_nodes,
                 "elapsed_seconds": result.elapsed_seconds, "seed": result.seed, "stop_reason": result.stop_reason,
                 "improvements": [{"evaluation": i, "makespan_seconds": value} for i, value in result.improvements],
             })

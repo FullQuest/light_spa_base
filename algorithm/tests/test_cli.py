@@ -18,7 +18,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             m2, details = json.loads(output.read_text()), json.loads(report.read_text())
             self.assertEqual(set(m2), {"brigades"})
-            self.assertEqual(details["conflict_model"], "hardcoded_zero_matrix")
+            self.assertEqual(details["conflict_model"], "zero_fallback")
             self.assertFalse(details["optimality_proven"])
             checked = subprocess.run(command + ["--evaluate", str(output)], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(checked.returncode, 0, checked.stderr)

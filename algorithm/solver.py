@@ -1,8 +1,8 @@
-"""Multi-start search over worker partitions and feasible machine sequences.
+"""Budgeted hybrid search over worker partitions and feasible machine sequences.
 
 The evaluator is exact for a fixed solution: it finds longest paths in the union
-of incident precedences and brigade queue edges. The optimizer is a heuristic;
-its incumbent is always feasible, but it does not certify global optimality.
+of incident precedences and brigade queue edges. Small problems also receive an
+exhaustive branch-and-bound search; large problems keep a feasible incumbent.
 """
 
 from __future__ import annotations
@@ -12,12 +12,14 @@ import random
 import time
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import combinations
 
 from .models import Brigade, ConflictMatrix, Problem, Solution, identifier, number
 
 
 Groups = tuple[tuple[int, ...], ...]
 Routes = tuple[tuple[int, ...], ...]
+DEFAULT_TIME_LIMIT_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,8 @@ class OptimizationResult:
     seed: int
     stop_reason: str
     improvements: tuple[tuple[int, float], ...]
+    optimality_proven: bool = False
+    exact_nodes: int = 0
 
 
 class _Context:
@@ -89,7 +93,26 @@ class _Context:
         if len(ordered) != self.m:
             raise ValueError("Incident precedence graph contains a cycle")
         self.topological = tuple(ordered)
+        # Remove redundant transitive edges, retaining exactly the same partial
+        # order. This matters when the loader supplies the transitive closure.
+        reachable = [0] * self.m
+        reduced = [[] for _ in range(self.m)]
+        position = {event: i for i, event in enumerate(ordered)}
+        for source in reversed(ordered):
+            for target in sorted(self.successors[source], key=position.__getitem__):
+                if not reachable[source] & (1 << target):
+                    reduced[source].append(target)
+                    reachable[source] |= (1 << target) | reachable[target]
+        self.successors = tuple(tuple(row) for row in reduced)
+        incoming = [[] for _ in range(self.m)]
+        for source, row in enumerate(self.successors):
+            for target in row:
+                incoming[target].append(source)
+        self.predecessors = tuple(tuple(row) for row in incoming)
+        self.indegrees = tuple(map(len, incoming))
+        self.reachable = tuple(reachable)
         self.metrics = lru_cache(maxsize=8192)(self._metrics)
+        self.evaluations = 0
 
     def _metrics(self, group: tuple[int, ...]) -> tuple[tuple[float, ...], float]:
         kmax = max((self.matrix[a][b] for pos, a in enumerate(group) for b in group[pos + 1:]), default=0)
@@ -121,6 +144,7 @@ class _Context:
                               for i, (group, route) in enumerate(zip(candidate.groups, candidate.routes))))
 
     def evaluate(self, groups: Groups, routes: Routes) -> Evaluation | None:
+        self.evaluations += 1
         # Internal candidates preserve employee/event membership by construction.
         if any(not 2 <= len(group) <= 5 for group in groups) or any(not route for route in routes):
             return None
@@ -160,10 +184,26 @@ class _Context:
         for event in self.topological:
             finish[event] = (max((finish[p] for p in self.predecessors[event]), default=0)
                              + self.bases[event] / fastest[self.resource_indices[event]])
-        work_bounds = [sum(base for base, r in zip(self.bases, self.resource_indices) if r == resource)
-                       / sum(worker[resource] for worker in self.skills)
-                       for resource in range(len(self.resources))]
-        return max(max(finish), max(work_bounds))
+        work = [sum(base for base, r in zip(self.bases, self.resource_indices) if r == resource)
+                for resource in range(len(self.resources))]
+        capacity = [sum(worker[r] for worker in self.skills) for r in range(len(work))]
+        bounds = [max(finish), *(w / s for w, s in zip(work, capacity))]
+        # A worker can process only ONE resource at a time. For any nonnegative
+        # resource weights w, total weighted work / sum(max_r(w_r * skill_ir))
+        # is a lower bound, even allowing workers to regroup/preempt with K=0.
+        weights = [[1.0] * len(work), [1 / s for s in capacity]]
+        for a, b in combinations(range(len(work)), 2):
+            # All breakpoints of the two-resource relaxation. For two resources
+            # this maximizes the bound exactly; for more, each pair is valid.
+            for worker in self.skills:
+                if worker[a] and worker[b]:
+                    row = [0.0] * len(work)
+                    row[a], row[b] = worker[b], worker[a]
+                    weights.append(row)
+        for row in weights:
+            rate = sum(max(w * s for w, s in zip(row, worker)) for worker in self.skills)
+            bounds.append(sum(w * value for w, value in zip(row, work)) / rate)
+        return max(bounds)
 
 
 def evaluate(problem: Problem, solution: Solution, conflicts: ConflictMatrix | None = None) -> Evaluation:
@@ -329,46 +369,149 @@ def _mutate(context: _Context, candidate: Candidate, rng: random.Random) -> Cand
         return _decode(context, candidate.groups, rng, noise=rng.uniform(0.1, 1.0))
     new_groups = tuple(tuple(sorted(group)) for group in groups)
     new_routes = tuple(tuple(route) for route in routes)
+    # Coordinate workforce and schedule changes: a good new composition may
+    # need different assignments, even when keeping the old queues is infeasible.
+    if new_groups != candidate.groups and rng.random() < 0.3:
+        return _decode(context, new_groups, rng, noise=rng.uniform(0, 0.5))
     result = context.evaluate(new_groups, new_routes)
     return Candidate(new_groups, new_routes, result) if result is not None else None
 
 
+def _neighborhood(context: _Context, candidate: Candidate, *, wide: bool = False):
+    """All single-worker moves/swaps and single-event insertions/swaps.
+
+    This is a complete local neighborhood, not a claim of global optimality.
+    Queues may intentionally wait; the evaluator rejects only infeasibility.
+    """
+    groups, routes = candidate.groups, candidate.routes
+    count = len(groups)
+    for a, b in combinations(range(count), 2):
+        for x in range(len(groups[a])):
+            for y in range(len(groups[b])):
+                changed = [list(group) for group in groups]
+                changed[a][x], changed[b][y] = changed[b][y], changed[a][x]
+                yield tuple(tuple(sorted(group)) for group in changed), routes
+    for a in range(count):
+        if len(groups[a]) <= 2:
+            continue
+        for b in range(count):
+            if a == b or len(groups[b]) >= 5:
+                continue
+            for x in range(len(groups[a])):
+                changed = [list(group) for group in groups]
+                changed[b].append(changed[a].pop(x))
+                yield tuple(tuple(sorted(group)) for group in changed), routes
+    # Late events first, but earlier predecessors are also fully enumerated.
+    events = sorted(range(context.m), key=lambda e: (
+        candidate.evaluation.starts[e] + candidate.evaluation.durations[e]), reverse=True)
+    for event in events:
+        a = candidate.evaluation.owners[event]
+        x = routes[a].index(event)
+        for b in range(count):
+            if a != b and len(routes[a]) == 1:
+                continue
+            if not math.isfinite(context.metrics(groups[b])[0][event]):
+                continue
+            remaining = [list(route) for route in routes]
+            remaining[a].pop(x)
+            for y in range(len(remaining[b]) + 1):
+                if a == b and x == y:
+                    continue
+                changed = [list(route) for route in remaining]
+                changed[b].insert(y, event)
+                yield groups, tuple(tuple(route) for route in changed)
+    for event, other in combinations(events, 2):
+        a, b = candidate.evaluation.owners[event], candidate.evaluation.owners[other]
+        if (not math.isfinite(context.metrics(groups[a])[0][other]) or
+                not math.isfinite(context.metrics(groups[b])[0][event])):
+            continue
+        changed = [list(route) for route in routes]
+        x, y = routes[a].index(event), routes[b].index(other)
+        changed[a][x], changed[b][y] = other, event
+        yield groups, tuple(tuple(route) for route in changed)
+    if not wide:
+        return
+    # Exact re-partition of every pair of brigades (at most ten workers). Unlike
+    # single swaps this crosses barriers that require moving several workers at
+    # once. Queues stay fixed, so brigade labels are NOT interchangeable here.
+    for a, b in combinations(range(count), 2):
+        workers = tuple(sorted(groups[a] + groups[b]))
+        for size in range(max(2, len(workers) - 5), min(5, len(workers) - 2) + 1):
+            for first in combinations(workers, size):
+                second = tuple(w for w in workers if w not in first)
+                if first == groups[a]:
+                    continue
+                # Each brigade's serial load is a necessary lower bound for
+                # this fixed assignment, independent of dependency waiting.
+                if any(sum(context.metrics(group)[0][e] for e in routes[index]) > candidate.evaluation.makespan_seconds
+                       for group, index in ((first, a), (second, b))):
+                    continue
+                changed = list(groups)
+                changed[a], changed[b] = first, second
+                yield tuple(changed), routes
+    # Move consecutive blocks together; a useful chain often cannot be moved
+    # one event at a time without a cycle or a temporary Cmax increase.
+    for a, route in enumerate(routes):
+        for length in (2, 3):
+            if len(route) <= length:
+                continue
+            for x in range(len(route) - length + 1):
+                block = route[x:x + length]
+                for b in range(count):
+                    if a == b or any(not math.isfinite(context.metrics(groups[b])[0][e]) for e in block):
+                        continue
+                    for y in range(len(routes[b]) + 1):
+                        changed = list(routes)
+                        changed[a] = route[:x] + route[x + length:]
+                        changed[b] = routes[b][:y] + block + routes[b][y:]
+                        yield groups, tuple(changed)
+
+
 def optimize(problem: Problem, conflicts: ConflictMatrix | None = None, *,
              initial_solution: Solution | None = None, seed: int = 0,
-             iterations: int = 100_000, time_limit_seconds: float = 60) -> OptimizationResult:
-    """Return the best feasible incumbent within an iteration/time budget.
+             iterations: int | None = None, time_limit_seconds: float = DEFAULT_TIME_LIMIT_SECONDS) -> OptimizationResult:
+    """Return the best feasible incumbent within a shared time/iteration budget.
 
-    A supplied baseline participates in the search and can never be lost.
-    Fixed seed + iteration budget are reproducible when the time limit is not hit.
+    No iteration cap is imposed by default. Small instances are enumerated with
+    branch-and-bound; otherwise annealing alternates with exhaustive local
+    neighborhoods. Fixed seed + iterations are reproducible unless time expires.
+    A supplied baseline is never lost. Optimality is reported only after complete
+    enumeration or attaining a valid lower bound (floating tolerance 1e-12).
     """
-    if type(iterations) is not int or iterations < 0:
-        raise ValueError("iterations must be a non-negative integer")
+    if iterations is not None and (type(iterations) is not int or iterations < 0):
+        raise ValueError("iterations must be a non-negative integer or None")
+    if type(seed) is not int:
+        raise ValueError("seed must be an integer")
     number(time_limit_seconds, "time_limit_seconds", 0.001, 170)
     started = time.monotonic()
     deadline = started + time_limit_seconds
     context, rng = _Context(problem, conflicts), random.Random(seed)
     minimum_count = (context.n + 4) // 5
-    # Each brigade requires a distinct employee/event pair with a matching skill.
     options = [[e for e, r in enumerate(context.resource_indices) if skills[r]] for skills in context.skills]
     maximum_count = min(context.n // 2, context.m, len(_matching(options)))
     if minimum_count > maximum_count:
         raise ValueError("No feasible formation: too few incidents or qualified workers to use all employees in groups of 2..5")
+    lower_bound = context.lower_bound()
     current: dict[int, Candidate] = {}
     elite: dict[int, Candidate] = {}
-    visits: dict[int, int] = {}
+    pools: dict[int, dict[Groups, Candidate]] = {}
     improvements: list[tuple[int, float]] = []
-    evaluated = 0
     best: Candidate | None = None
 
     def remember(candidate: Candidate) -> None:
-        nonlocal best, evaluated
-        evaluated += 1
+        nonlocal best
         count = len(candidate.groups)
         if count not in elite or candidate.evaluation.score < elite[count].evaluation.score:
             elite[count] = candidate
+        pool = pools.setdefault(count, {})
+        signature = tuple(sorted(candidate.groups))
+        if signature not in pool or candidate.evaluation.score < pool[signature].evaluation.score:
+            pool[signature] = candidate
+            if len(pool) > 8:
+                del pool[max(pool, key=lambda key: pool[key].evaluation.score)]
         if best is None or candidate.evaluation.score < best.evaluation.score:
             if best is None or candidate.evaluation.makespan_seconds < best.evaluation.makespan_seconds:
-                improvements.append((evaluated, candidate.evaluation.makespan_seconds))
+                improvements.append((context.evaluations, candidate.evaluation.makespan_seconds))
             best = candidate
 
     if initial_solution is not None:
@@ -387,56 +530,92 @@ def optimize(problem: Problem, conflicts: ConflictMatrix | None = None, *,
             raise ValueError("Cannot construct a feasible initial schedule")
         remember(candidate)
         current[count] = elite[count]
+    assert best is not None
     counts = sorted(current)
     visits = dict.fromkeys(counts, 0)
-    completed_iterations = 0
-    for step in range(iterations):
+    completed_iterations, exact_nodes = 0, 0
+    # A feasible upper bound attaining a valid lower bound proves optimality,
+    # but a finite iteration cap keeps the historic stop-reason contract.
+    proven = iterations is None and (maximum_count == 1 or
+                                     math.isclose(best.evaluation.makespan_seconds, lower_bound, rel_tol=1e-12))
+    reason = "lower_bound" if proven else "iteration_limit"
+    if maximum_count == 1 and iterations is None:
+        # Only one partition and one serial processor: all topological queues
+        # have the same total processing time, including nonzero conflicts.
+        reason = "exact_optimum"
+    if not proven and iterations is None and context.n <= 10 and context.m <= 10:
+        from .exact import search
+        proven, exact_nodes = search(context, best, deadline,
+                                     min(iterations, 200_000) if iterations is not None else 1_000_000_000,
+                                     remember)
+        completed_iterations += exact_nodes
+        if proven:
+            reason = "exact_optimum"
+
+    # Complete local sweeps run through the SAME budget checks as random moves.
+    # A sweep snapshots a candidate; the next one starts from the improved best.
+    neighborhood = None
+    neighborhood_best = None
+    sweep_count = 0
+    next_sweep = completed_iterations + 5000
+    while not proven and (iterations is None or completed_iterations < iterations):
         if time.monotonic() >= deadline:
+            reason = "time_limit"
             break
-        count = counts[step % len(counts)]
+        completed_iterations += 1
+        if neighborhood is None and completed_iterations >= next_sweep:
+            neighborhood_best = best
+            sweep_count += 1
+            neighborhood = iter(_neighborhood(context, best, wide=sweep_count % 3 == 0))
+        if neighborhood is not None:
+            move = next(neighborhood, None)
+            if move is None:
+                # Consecutive descent sweeps while improving, then diversify.
+                next_sweep = completed_iterations + (1 if best.evaluation.score < neighborhood_best.evaluation.score else 5000)
+                neighborhood = None
+                continue
+            groups, routes = move
+            result = context.evaluate(groups, routes)
+            if result is not None:
+                remember(Candidate(groups, routes, result))
+            continue
+        # Every fifth random step explores all counts in turn. The other steps
+        # prefer counts with good incumbents, without hardcoding a fixture count.
+        if completed_iterations % 5 == 0:
+            count = counts[(completed_iterations // 5) % len(counts)]
+        else:
+            scale = max(best.evaluation.makespan_seconds * 0.04, 1e-12)
+            weights = [math.exp(-min(50, (elite[c].evaluation.makespan_seconds - best.evaluation.makespan_seconds) / scale))
+                       for c in counts]
+            count = rng.choices(counts, weights)[0]
         visits[count] += 1
-        # Independent annealing chains for different brigade counts; periodically
-        # restart from new partitions to escape workforce/schedule local minima.
-        if visits[count] % 700 == 0:
-            if (visits[count] // 700) % 4:
-                current[count] = elite[count]
-                # Keep useful structures while exploring beyond the local optimum.
-                for _ in range(3):
-                    candidate = _mutate(context, current[count], rng)
-                    evaluated += 1
-                    if candidate is not None:
-                        evaluated -= 1
-                        remember(candidate)
-                        current[count] = candidate
-            else:
-                candidate = _decode(context, _partition(context, count, rng, visits[count] // 700), rng, noise=0.5)
-                if candidate is not None:
-                    remember(candidate)
-                    current[count] = candidate
-        candidate = _mutate(context, current[count], rng)
-        evaluated += 1
-        completed_iterations = step + 1
+        if visits[count] % 2000 == 0:
+            candidate = _decode(context, _partition(context, count, rng, visits[count] // 2000), rng, noise=0.5)
+        else:
+            if visits[count] % 700 == 0:
+                current[count] = rng.choice(list(pools[count].values()))
+            parent = rng.choice(list(pools[count].values())) if rng.random() < 0.25 else current[count]
+            candidate = _mutate(context, parent, rng)
         if candidate is None:
             continue
-        evaluated -= 1  # remember accounts for this valid evaluation.
         remember(candidate)
         previous = current[count].evaluation
         delta = candidate.evaluation.makespan_seconds - previous.makespan_seconds
-        # Allow moves on a Cmax plateau. The best incumbent still uses exact Cmax.
         if delta == 0:
             delta = (candidate.evaluation.score[1] - previous.score[1]) / context.m * 0.01
         temperature = max(elite[count].evaluation.makespan_seconds * 0.04
                           * 0.002 ** ((visits[count] % 700) / 700), 1e-12)
         if delta <= 0 or rng.random() < math.exp(-delta / temperature):
             current[count] = candidate
-    assert best is not None
+        if iterations is None and math.isclose(best.evaluation.makespan_seconds, lower_bound, rel_tol=1e-12):
+            proven, reason = True, "lower_bound"
+    if proven:
+        lower_bound = best.evaluation.makespan_seconds
     solution = context.to_solution(best)
-    # Validate the exported M2 document with the same public path as external input.
     final_evaluation = evaluate(problem, solution, context.conflicts)
-    return OptimizationResult(solution, final_evaluation, context.lower_bound(), evaluated,
-                              completed_iterations, time.monotonic() - started, seed,
-                              "iteration_limit" if completed_iterations == iterations else "time_limit",
-                              tuple(improvements))
+    return OptimizationResult(solution, final_evaluation, lower_bound, context.evaluations,
+                              completed_iterations, time.monotonic() - started, seed, reason,
+                              tuple(improvements), proven, exact_nodes)
 
 
 def evaluation_report(problem: Problem, solution: Solution, evaluation: Evaluation,

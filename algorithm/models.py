@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from typing import Mapping
 
 
+EMBEDDED_EMPLOYEE_IDS = (610001, 610003, 610004, 610005, 610007, 610008, 610009,
+                         610010, 610012, 610013, 610014, 610016, 610018, 610019,
+                         610023, 610024, 610025, 610026, 610027, 610028, 610030,
+                         610031, 610032, 610036, 610037, 610038, 610039, 610040)
+
+
 def identifier(value: object, label: str) -> int:
     if type(value) is not int or value <= 0:
         raise ValueError(f"{label} must be a positive integer")
@@ -81,8 +87,16 @@ class ConflictMatrix:
 
     @classmethod
     def zeros(cls, employees: tuple[Employee, ...]) -> ConflictMatrix:
-        """Hardcoded temporary model: every pair has K=0, regardless of skills."""
+        """Return the embedded worker matrix, with a zero fallback for other rosters.
+
+        The 28x28 coefficients from the repository are indexed by
+        EMBEDDED_EMPLOYEE_IDS, independently of input order. Other rosters get
+        a zero matrix until an external matrix is supplied via ``--conflicts``.
+        The method name is retained for compatibility with existing callers.
+        """
         ids = tuple(e.tabel for e in employees)
+        if set(ids) != set(EMBEDDED_EMPLOYEE_IDS):
+            return cls(ids, tuple(tuple(0.0 for _ in ids) for _ in ids))
         matrix = (
             (0, 0.3054453669631635, 0.5681437366904697, 0.19183850538951291, 0.1165557004296011, 0.17908643361039275,
              0.65087576372544, 0.3089452091131204, 0.3768885155711651, 0.09043332537303224, 0.5641685283407285,
@@ -253,7 +267,8 @@ class ConflictMatrix:
              0.3047121315845555, 0.7341676021267167, 0.7366862896969799, 0.8181264051960474, 0.1778865467907153,
              0.38215007870589673, 0.2088529083124064, 0))
 
-        return cls(ids, matrix)
+        indices = {employee_id: i for i, employee_id in enumerate(EMBEDDED_EMPLOYEE_IDS)}
+        return cls(ids, tuple(tuple(matrix[indices[a]][indices[b]] for b in ids) for a in ids))
 
     def __post_init__(self) -> None:
         size = len(self.employee_ids)

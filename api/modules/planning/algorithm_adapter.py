@@ -6,6 +6,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from algorithm.input import ROOT
+from algorithm.solver import DEFAULT_TIME_LIMIT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def solve(problem: dict) -> tuple[dict, dict]:
     Input: normalized employees, incidents and precedences (see README).
     Output: strict M2 JSON and a report with schedule offsets in seconds.
     No database, HTTP or frontend dependencies belong in the algorithm.
-    Current implementation calls algorithm/solver.py, with a zero conflict matrix.
+    Calls the hybrid solver with the shared 30-second budget and embedded matrix.
     """
     with TemporaryDirectory(prefix="brigades-") as directory:
         work = Path(directory)
@@ -31,8 +32,8 @@ def solve(problem: dict) -> tuple[dict, dict]:
             completed = subprocess.run(
                 [sys.executable, "-m", "algorithm", "--input", str(source),
                  "--output", str(output), "--report", str(report),
-                 "--seed", "0", "--iterations", "200000", "--time-limit", "150"],
-                cwd=ROOT, capture_output=True, text=True, timeout=170,
+                 "--seed", "0", "--time-limit", str(DEFAULT_TIME_LIMIT_SECONDS)],
+                cwd=ROOT, capture_output=True, text=True, timeout=DEFAULT_TIME_LIMIT_SECONDS + 15,
             )
         except subprocess.TimeoutExpired as error:
             raise AlgorithmError("Расчёт превысил допустимое время. Попробуйте снова.") from error
