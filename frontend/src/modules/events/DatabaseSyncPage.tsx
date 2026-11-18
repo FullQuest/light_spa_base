@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HttpError } from '../../shared/http';
 import { authRequest } from '../../auth/api';
+import { invalidateFormationResults } from '../brigades/mockApi';
 import './database-sync.css';
 
 interface SyncStatus {
@@ -52,13 +53,14 @@ export function DatabaseSyncPage() {
   }
 
   async function clearCache() {
-    if (!window.confirm('Удалить текущую локальную копию объектов, связей и событий? Внешняя БД не изменится.')) return;
+    if (!window.confirm('Удалить текущую локальную копию объектов, связей и событий, а также результат формирования бригад и JSON? Внешняя БД не изменится.')) return;
     setWorking(true); setError(''); setNotice('');
     try {
       const result = await authRequest<Record<string, number>>('/infra-loader/delete-all', { method: 'POST' });
+      invalidateFormationResults();
       await refreshStatus();
       const removed = Object.values(result).reduce((sum, count) => sum + count, 0);
-      setNotice(`Локальный кэш очищен (${removed} записей). Граф автоматически загрузит текущую версию при следующем запросе.`);
+      setNotice(`Локальный кэш очищен (${removed} записей). Результат формирования бригад и JSON удалены. Граф автоматически загрузит текущую версию при следующем запросе.`);
     } catch (reason) {
       setError(failureMessage(reason));
     } finally { setWorking(false); }

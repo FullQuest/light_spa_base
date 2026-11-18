@@ -1,0 +1,506 @@
+[
+  {
+    "tabel": 610001,
+    "first_name": "Борис",
+    "last_name": "Кузьмин",
+    "middle_name": "Михайлович",
+    "start_date_experience": "2009-03-15",
+    "qualifications": [
+      {
+        "id_qualification": 720001,
+        "id_employee": 610001,
+        "resource_type": "energy",
+        "proff": 8.8
+      }
+    ]
+  },
+  {
+    "tabel": 610003,
+    "first_name": "Фёдор",
+    "last_name": "Никитин",
+    "middle_name": "Петрович",
+    "start_date_experience": "2003-10-11",
+    "qualifications": [
+      {
+        "id_qualification": 720004,
+        "id_employee": 610003,
+        "resource_type": "energy",
+        "proff": 6.1
+      }
+    ]
+  },
+  {
+    "tabel": 610004,
+    "first_name": "Евгений",
+    "last_name": "Сергеев",
+    "middle_name": "Павлович",
+    "start_date_experience": "2009-06-07",
+    "qualifications": [
+      {
+        "id_qualification": 720005,
+        "id_employee": 610004,
+        "resource_type": "water",
+        "proff": 8.0
+      },
+      {
+        "id_qualification": 720006,
+        "id_employee": 610004,
+        "resource_type": "energy",
+        "proff": 9.0
+      }
+    ]
+  },
+  {
+    "tabel": 610005,
+    "first_name": "Вадим",
+    "last_name": "Егоров",
+    "middle_name": "Викторович",
+    "start_date_experience": "2000-10-26",
+    "qualifications": [
+      {
+        "id_qualification": 720007,
+        "id_employee": 610005,
+        "resource_type": "water",
+        "proff": 10.0
+      }
+    ]
+  },
+  {
+    "tabel": 610007,
+    "first_name": "Денис",
+    "last_name": "Дмитриев",
+    "middle_name": "Павлович",
+    "start_date_experience": "2008-08-18",
+    "qualifications": [
+      {
+        "id_qualification": 720009,
+        "id_employee": 610007,
+        "resource_type": "water",
+        "proff": 4.4
+      },
+      {
+        "id_qualification": 720010,
+        "id_employee": 610007,
+        "resource_type": "energy",
+        "proff": 4.9
+      }
+    ]
+  },
+  {
+    "tabel": 610008,
+    "first_name": "Фёдор",
+    "last_name": "Козлов",
+    "middle_name": "Евгеньевич",
+    "start_date_experience": "2000-10-10",
+    "qualifications": [
+      {
+        "id_qualification": 720011,
+        "id_employee": 610008,
+        "resource_type": "energy",
+        "proff": 9.6
+      }
+    ]
+  },
+  {
+    "tabel": 610009,
+    "first_name": "Владимир",
+    "last_name": "Яковлев",
+    "middle_name": "Дмитриевич",
+    "start_date_experience": "2006-06-01",
+    "qualifications": [
+      {
+        "id_qualification": 720012,
+        "id_employee": 610009,
+        "resource_type": "water",
+        "proff": 6.6
+      }
+    ]
+  },
+  {
+    "tabel": 610010,
+    "first_name": "Игорь",
+    "last_name": "Попов",
+    "middle_name": "Андреевич",
+    "start_date_experience": "2009-09-19",
+    "qualifications": [
+      {
+        "id_qualification": 720013,
+        "id_employee": 610010,
+        "resource_type": "water",
+        "proff": 5.8
+      },
+      {
+        "id_qualification": 720014,
+        "id_employee": 610010,
+        "resource_type": "energy",
+        "proff": 6.4
+      }
+    ]
+  },
+  {
+    "tabel": 610012,
+    "first_name": "Наталья",
+    "last_name": "Павлова",
+    "middle_name": "Олеговна",
+    "start_date_experience": "2010-08-06",
+    "qualifications": [
+      {
+        "id_qualification": 720016,
+        "id_employee": 610012,
+        "resource_type": "energy",
+        "proff": 6.4
+      }
+    ]
+  },
+  {
+    "tabel": 610013,
+    "first_name": "Григорий",
+    "last_name": "Григорьев",
+    "middle_name": "Артёмович",
+    "start_date_experience": "2009-01-06",
+    "qualifications": [
+      {
+        "id_qualification": 720017,
+        "id_employee": 610013,
+        "resource_type": "water",
+        "proff": 5.1
+      },
+      {
+        "id_qualification": 720018,
+        "id_employee": 610013,
+        "resource_type": "energy",
+        "proff": 5.5
+      }
+    ]
+  },
+  {
+    "tabel": 610014,
+    "first_name": "Станислав",
+    "last_name": "Фёдоров",
+    "middle_name": "Владимирович",
+    "start_date_experience": "2008-01-27",
+    "qualifications": [
+      {
+        "id_qualification": 720019,
+        "id_employee": 610014,
+        "resource_type": "water",
+        "proff": 6.5
+      },
+      {
+        "id_qualification": 720020,
+        "id_employee": 610014,
+        "resource_type": "energy",
+        "proff": 6.0
+      }
+    ]
+  },
+  {
+    "tabel": 610016,
+    "first_name": "Артур",
+    "last_name": "Степанов",
+    "middle_name": "Олегович",
+    "start_date_experience": "2006-07-11",
+    "qualifications": [
+      {
+        "id_qualification": 720022,
+        "id_employee": 610016,
+        "resource_type": "water",
+        "proff": 7.3
+      }
+    ]
+  },
+  {
+    "tabel": 610018,
+    "first_name": "Светлана",
+    "last_name": "Петрова",
+    "middle_name": "Александровна",
+    "start_date_experience": "2016-08-03",
+    "qualifications": [
+      {
+        "id_qualification": 720024,
+        "id_employee": 610018,
+        "resource_type": "energy",
+        "proff": 4.9
+      }
+    ]
+  },
+  {
+    "tabel": 610019,
+    "first_name": "Наталья",
+    "last_name": "Михайлова",
+    "middle_name": "Павловна",
+    "start_date_experience": "2003-09-14",
+    "qualifications": [
+      {
+        "id_qualification": 720025,
+        "id_employee": 610019,
+        "resource_type": "energy",
+        "proff": 7.6
+      }
+    ]
+  },
+  {
+    "tabel": 610023,
+    "first_name": "Андрей",
+    "last_name": "Морозов",
+    "middle_name": "Артёмович",
+    "start_date_experience": "2014-07-16",
+    "qualifications": [
+      {
+        "id_qualification": 720030,
+        "id_employee": 610023,
+        "resource_type": "water",
+        "proff": 5.0
+      }
+    ]
+  },
+  {
+    "tabel": 610024,
+    "first_name": "Олег",
+    "last_name": "Андреев",
+    "middle_name": "Павлович",
+    "start_date_experience": "2006-06-12",
+    "qualifications": [
+      {
+        "id_qualification": 720031,
+        "id_employee": 610024,
+        "resource_type": "water",
+        "proff": 6.0
+      },
+      {
+        "id_qualification": 720032,
+        "id_employee": 610024,
+        "resource_type": "energy",
+        "proff": 7.1
+      }
+    ]
+  },
+  {
+    "tabel": 610025,
+    "first_name": "Дмитрий",
+    "last_name": "Титов",
+    "middle_name": "Сергеевич",
+    "start_date_experience": "2000-04-03",
+    "qualifications": [
+      {
+        "id_qualification": 720033,
+        "id_employee": 610025,
+        "resource_type": "water",
+        "proff": 8.9
+      }
+    ]
+  },
+  {
+    "tabel": 610026,
+    "first_name": "Вадим",
+    "last_name": "Захаров",
+    "middle_name": "Дмитриевич",
+    "start_date_experience": "2009-03-28",
+    "qualifications": [
+      {
+        "id_qualification": 720034,
+        "id_employee": 610026,
+        "resource_type": "water",
+        "proff": 3.9
+      },
+      {
+        "id_qualification": 720035,
+        "id_employee": 610026,
+        "resource_type": "energy",
+        "proff": 3.5
+      }
+    ]
+  },
+  {
+    "tabel": 610027,
+    "first_name": "Григорий",
+    "last_name": "Александров",
+    "middle_name": "Дмитриевич",
+    "start_date_experience": "2011-08-24",
+    "qualifications": [
+      {
+        "id_qualification": 720036,
+        "id_employee": 610027,
+        "resource_type": "water",
+        "proff": 8.2
+      }
+    ]
+  },
+  {
+    "tabel": 610028,
+    "first_name": "Сергей",
+    "last_name": "Семёнов",
+    "middle_name": "Владимирович",
+    "start_date_experience": "2000-08-06",
+    "qualifications": [
+      {
+        "id_qualification": 720037,
+        "id_employee": 610028,
+        "resource_type": "water",
+        "proff": 9.1
+      },
+      {
+        "id_qualification": 720038,
+        "id_employee": 610028,
+        "resource_type": "energy",
+        "proff": 8.2
+      }
+    ]
+  },
+  {
+    "tabel": 610030,
+    "first_name": "Михаил",
+    "last_name": "Романов",
+    "middle_name": "Артёмович",
+    "start_date_experience": "2006-02-26",
+    "qualifications": [
+      {
+        "id_qualification": 720040,
+        "id_employee": 610030,
+        "resource_type": "water",
+        "proff": 5.2
+      },
+      {
+        "id_qualification": 720041,
+        "id_employee": 610030,
+        "resource_type": "energy",
+        "proff": 5.0
+      }
+    ]
+  },
+  {
+    "tabel": 610031,
+    "first_name": "Олег",
+    "last_name": "Макаров",
+    "middle_name": "Ильич",
+    "start_date_experience": "2002-01-10",
+    "qualifications": [
+      {
+        "id_qualification": 720042,
+        "id_employee": 610031,
+        "resource_type": "energy",
+        "proff": 8.7
+      }
+    ]
+  },
+  {
+    "tabel": 610032,
+    "first_name": "Тимур",
+    "last_name": "Соколов",
+    "middle_name": "Евгеньевич",
+    "start_date_experience": "2009-08-26",
+    "qualifications": [
+      {
+        "id_qualification": 720043,
+        "id_employee": 610032,
+        "resource_type": "water",
+        "proff": 6.1
+      }
+    ]
+  },
+  {
+    "tabel": 610036,
+    "first_name": "Степан",
+    "last_name": "Зайцев",
+    "middle_name": "Романович",
+    "start_date_experience": "2015-01-21",
+    "qualifications": [
+      {
+        "id_qualification": 720050,
+        "id_employee": 610036,
+        "resource_type": "water",
+        "proff": 3.6
+      },
+      {
+        "id_qualification": 720051,
+        "id_employee": 610036,
+        "resource_type": "energy",
+        "proff": 4.4
+      }
+    ]
+  },
+  {
+    "tabel": 610037,
+    "first_name": "Мария",
+    "last_name": "Соловьёва",
+    "middle_name": "Андреевна",
+    "start_date_experience": "2003-06-09",
+    "qualifications": [
+      {
+        "id_qualification": 720052,
+        "id_employee": 610037,
+        "resource_type": "water",
+        "proff": 7.8
+      },
+      {
+        "id_qualification": 720053,
+        "id_employee": 610037,
+        "resource_type": "energy",
+        "proff": 3.0
+      }
+    ]
+  },
+  {
+    "tabel": 610038,
+    "first_name": "Леонид",
+    "last_name": "Гусев",
+    "middle_name": "Игоревич",
+    "start_date_experience": "2006-10-05",
+    "qualifications": [
+      {
+        "id_qualification": 720054,
+        "id_employee": 610038,
+        "resource_type": "water",
+        "proff": 7.2
+      },
+      {
+        "id_qualification": 720055,
+        "id_employee": 610038,
+        "resource_type": "energy",
+        "proff": 6.8
+      }
+    ]
+  },
+  {
+    "tabel": 610039,
+    "first_name": "Мария",
+    "last_name": "Кузнецова",
+    "middle_name": "Андреевна",
+    "start_date_experience": "2006-03-19",
+    "qualifications": [
+      {
+        "id_qualification": 720056,
+        "id_employee": 610039,
+        "resource_type": "water",
+        "proff": 2.4
+      },
+      {
+        "id_qualification": 720057,
+        "id_employee": 610039,
+        "resource_type": "energy",
+        "proff": 7.4
+      }
+    ]
+  },
+  {
+    "tabel": 610040,
+    "first_name": "Максим",
+    "last_name": "Алексеев",
+    "middle_name": "Михайлович",
+    "start_date_experience": "2014-12-05",
+    "qualifications": [
+      {
+        "id_qualification": 720058,
+        "id_employee": 610040,
+        "resource_type": "water",
+        "proff": 4.8
+      },
+      {
+        "id_qualification": 720059,
+        "id_employee": 610040,
+        "resource_type": "energy",
+        "proff": 3.9
+      }
+    ]
+  }
+]
